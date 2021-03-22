@@ -1,41 +1,42 @@
-use crate::{db::{DBState, Register, persona::NewPersona, schema::users, user::{NewUser, Password, User}}, derive_password, jwt::blacklist::JwtData};
+use crate::{db::{DBState, Register, persona::NewPersona, schema::users, user::{NewUser, Password, User}}, derive_password};
 use crate::rocket::State;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, query_dsl::methods::FilterDsl};
 use rocket::{http::{Cookie, Cookies, Status}};
 use rocket_contrib::json::Json;
-use serde_json::json;
 use serde::{Serialize, Deserialize};
+use super::SUCCESS;
 use time;
-use crate::jwt::*;
+use crate::verification::{jwt::*, jwt::blacklist::JwtData};
+
+use super::EmptyResponse;
 
 pub const AUTH_COOKIE_NAME: &str = "authentication";
 
 #[post("/register", format = "application/json", data = "<user>")]
-pub fn register (user: Json<NewUser>, db: State<DBState>) -> Status {
+pub fn register (user: Json<NewUser>, db: State<DBState>) -> EmptyResponse {
 
-    if let Ok(users) = FilterDsl::filter(users::table, users::username.eq(&user.username))
+    let users = FilterDsl::filter(users::table, users::username.eq(&user.username))
         .limit(1)
         .load::<User>(&**db)
-    {
-        if users.len () > 0 {
-            return Status::UnprocessableEntity;
-        }
-    } else {
-        return Status::InternalServerError;
-    };
+        .map_err(|_| Status::UnprocessableEntity)?;
 
-    let user = if let Ok(u) = user.encrypt().salt() { u } else {
-        return Status::InternalServerError
-    };
+    if users.len () > 0 {
+        return Err(Status::UnprocessableEntity);
+    }
+
+    let user = user
+        .encrypt()
+        .salt()
+        .map_err(|_| Status::InternalServerError)?;
     
-    match user.register(&**db)
-                .and_then(|user| NewPersona::new_default (user.id).register (&**db)) {
-        Ok(_) => Status::Ok,
-        Err(e) => {
+    user.register(&**db)
+        .and_then(|user| NewPersona::new_default (user.id).register (&**db))
+        .map_err (|e| {
             println!("\t=> Error: {}", e);
             Status::InternalServerError
-        }
-    }
+        })?;
+
+    SUCCESS
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -46,36 +47,20 @@ pub struct Login {
 
 derive_password! (Login);
 
-#[derive(Responder)]
-pub enum LoginResponse {
-    #[response(status = 500, content_type = "plain")]
-    InternalServerError(String),
-    #[response(status = 401, content_type = "plain")]
-    Unauthorized(String),
-    #[response(status = 404, content_type = "json")]
-    NotFound(String),
-    #[response(status = 200)]
-    Success(())
-}
-
 #[post("/login", format = "application/json", data = "<user>")]
-pub fn login (user: Json<Login>, db: State<DBState>, jwt_key: State<JwtState>, mut cookies: Cookies) -> LoginResponse {
+pub fn login (user: Json<Login>, db: State<DBState>, jwt_key: State<DefaultJwtHandler>, mut cookies: Cookies) -> EmptyResponse {
 
     println! ("\t=> Logging in {}", user.username);
 
-    let dbuser: User = if let Ok(users) = FilterDsl::filter(users::table, users::username.eq(&user.username))
+    let users = FilterDsl::filter(users::table, users::username.eq(&user.username))
         .limit(1)
         .load::<User>(&**db)
-    {
-        if users.len () < 1 {
-            return LoginResponse::NotFound(json!({
-                "username": user.username
-            }).to_string())
-        } else {
-            users[0].clone ()
-        }
+        .map_err(|_| Status::InternalServerError)?;
+
+    let dbuser = if users.len () < 1 {
+        return Err(Status::NotFound)
     } else {
-        return LoginResponse::InternalServerError("Connection to database failed".to_string ())
+        users[0].clone ()
     };
 
     println! ("\t=> Found in db: {}", dbuser.id);
@@ -85,19 +70,17 @@ pub fn login (user: Json<Login>, db: State<DBState>, jwt_key: State<JwtState>, m
     println! ("\t=> encrypted password: {}", user.password);
     println! ("\t=> database  password: {}", dbuser.password);
 
-    let authorized = if let Ok(cmp) = dbuser.password_cmp(&user) { cmp } else {
-        return LoginResponse::InternalServerError("Failed to compare passwords".to_string ())
-    };
+    let authorized = dbuser.password_cmp(&user)
+        .map_err(|_| Status::InternalServerError)?;
 
     if !authorized {
-        return LoginResponse::Unauthorized ("password is incorrect".to_string())
+        return Err(Status::Unauthorized)
     }
 
     println! ("\t=> Password is correct");
 
-    let key = if let Ok(key) = Jwt::new_from_user (dbuser).encode (&jwt_key.key) { key } else {
-        return LoginResponse::InternalServerError("Failed to create jwt key".to_string ())
-    };
+    let key = DefaultJwt::new_from_user (dbuser).encode (&jwt_key.key)
+        .map_err(|_| Status::InternalServerError)?;
 
     println! ("\t=> {}", (key));
 
@@ -112,37 +95,23 @@ pub fn login (user: Json<Login>, db: State<DBState>, jwt_key: State<JwtState>, m
         .finish()
     );
 
-    LoginResponse::Success(())
-}
-
-#[derive(Responder)]
-pub enum LogoutResponse {
-    #[response(status = 500, content_type = "plain")]
-    InternalServerError(String),
-    #[response(status = 401)]
-    Unauthorized(()),
-    #[response(status = 422)]
-    UnprocessableEntity(String),
-    #[response(status = 200)]
-    Success(())
+    SUCCESS
 }
 
 #[post("/logout")]
-pub fn logout (jwt_key: State<JwtState>, mut cookies: Cookies) -> LogoutResponse {
+pub fn logout (jwt_key: State<DefaultJwtHandler>, mut cookies: Cookies) -> EmptyResponse {
 
-    let cookie = if let Some(cookie) = cookies.get_private(AUTH_COOKIE_NAME) { cookie } else {
-        return LogoutResponse::UnprocessableEntity("No authentication token found".to_string ())
-    };
+    let cookie = cookies.get_private(AUTH_COOKIE_NAME)
+        .ok_or(Status::UnprocessableEntity)?;
 
     let auth = cookie.value ().to_string ();
 
-    let jwt = if let Ok(key) = jwt_key.extract(&auth) { key } else {
-        return LogoutResponse::Unauthorized(())
-    };
+    let jwt = jwt_key.extract(&auth)
+        .map_err(|_| Status::Unauthorized)?;
 
     cookies.remove_private(Cookie::named (AUTH_COOKIE_NAME));
 
-    jwt_key.blacklist(JwtData::new_from_claims (jwt, auth));
+    (&*jwt_key).blacklist(JwtData::new_from_claims (jwt, auth));
 
-    LogoutResponse::Success(())
+    SUCCESS
 }

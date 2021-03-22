@@ -15,7 +15,7 @@ pub struct User {
 
 impl User {
 
-    pub fn query_from_username(username: String, db: &PgConnection) -> Result<User, diesel::result::Error> {
+    pub fn query_by(username: String, db: &PgConnection) -> Result<User, diesel::result::Error> {
         users::table
             .filter (users::username.eq(username))
             .limit(1)

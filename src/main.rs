@@ -1,4 +1,4 @@
-#![feature(proc_macro_hygiene, decl_macro)]
+#![feature(proc_macro_hygiene, decl_macro, associated_type_defaults)]
 #![recursion_limit="512"]
 
 use dotenv::dotenv;
@@ -18,7 +18,7 @@ extern crate chrono;
 
 pub mod db;
 pub mod routing;
-pub mod jwt;
+pub mod verification;
 
 fn main() {
     dotenv().ok();

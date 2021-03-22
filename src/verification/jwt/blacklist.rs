@@ -19,7 +19,7 @@ impl JwtData {
         }
     }
 
-    pub fn new_from_claims (claims: JWTClaims<Jwt>, token: String) -> JwtData {
+    pub fn new_from_claims<'a> (claims: JWTClaims<impl Jwt>, token: String) -> JwtData {
         Self::new (
             claims.expires_at.unwrap_or(Duration::from_hours(2)),
             token
@@ -56,12 +56,12 @@ impl PartialEq for JwtData {
 }
 
 #[derive(Clone)]
-pub struct Blacklist(Arc<Mutex<SortedVec<JwtData>>>);
+pub struct ThreadBlacklist(Arc<Mutex<SortedVec<JwtData>>>);
 
-impl Blacklist {
+impl ThreadBlacklist {
 
-    pub fn new () -> Blacklist {
-        let mut bl = Blacklist(Arc::new(Mutex::new(SortedVec::new())));
+    pub fn new () -> Self {
+        let mut bl = Self(Arc::new(Mutex::new(SortedVec::new())));
         bl.start_gc ();
         bl
     }
@@ -80,14 +80,9 @@ impl Blacklist {
     fn start_gc (&mut self) {
         let this = self.clone ();
         thread::spawn (move || {
-            println!("Hello from garbage collector thread");
-
             loop {
                 let duration = std::time::Duration::from_secs (5 * 60);
                 sleep (duration);
-
-                println!("GC CYCLE");
-
                 {
                     let mut queue = this.lock ();
 
@@ -111,17 +106,26 @@ impl Blacklist {
                         queue.remove_index (0);
                     }
                 }
-
-                println!("{}", this);
             }
         });
     }
 
-    pub fn blacklist (&self, jwt: JwtData) {
+}
+
+pub trait Blacklist: std::fmt::Display + Send + Sync {
+
+    fn blacklist (&self, jwt: JwtData);
+    fn contains (&self, token: &String) -> bool;
+
+}
+
+impl Blacklist for ThreadBlacklist {
+
+    fn blacklist (&self, jwt: JwtData) {
         self.lock ().insert (jwt);
     }
 
-    pub fn contains (&self, token: &String) -> bool {
+    fn contains (&self, token: &String) -> bool {
         self.lock ().iter ()
             .filter (|data| &data.token == token)
             .take(1)
@@ -131,7 +135,7 @@ impl Blacklist {
 
 }
 
-impl std::ops::Deref for Blacklist {
+impl std::ops::Deref for ThreadBlacklist {
 
     type Target = Arc<Mutex<SortedVec<JwtData>>>;
 
@@ -140,14 +144,14 @@ impl std::ops::Deref for Blacklist {
     }
 }
 
-impl std::ops::DerefMut for Blacklist {
+impl std::ops::DerefMut for ThreadBlacklist {
 
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl std::fmt::Display for Blacklist {
+impl std::fmt::Display for ThreadBlacklist {
 
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let string = (&**self.lock ())
@@ -157,4 +161,5 @@ impl std::fmt::Display for Blacklist {
             .join (", ");
         write!(f, "Blacklist [ {} ]", string)
     }
+
 }

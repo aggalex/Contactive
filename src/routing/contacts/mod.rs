@@ -1,9 +1,12 @@
 use diesel::QueryDsl;
-use rocket::{State, http::Cookies};
+use rocket::{State, http::{Cookies, Status}, response::Responder};
 use rocket_contrib::json::Json;
-use crate::{db::{DBState, Register, contact::{Contact, NewContact, UserContactRelation}, schema::{contacts, users_contacts_join}}, jwt::JwtState};
+use crate::{db::{DBState, Register, contact::{Contact, NewContact, UserContactRelation}, schema::{contacts, users_contacts_join}}, verification::jwt::DefaultJwtHandler};
 use crate::diesel::*;
+use super::{JsonResponse, Verifier};
+use crate::routing::JsonResponseNew;
 pub mod personas;
+
 
 #[derive(Responder)]
 pub enum ContactsResponse {
@@ -18,37 +21,25 @@ pub enum ContactsResponse {
 }
 
 #[get("/contacts")]
-pub fn get_contacts (db: State<DBState>, jwt_key: State<JwtState>, cookies: Cookies) -> ContactsResponse {
-    let user = if let Ok(user) = (*jwt_key).verify (cookies) { user } else {
-        return ContactsResponse::Unauthorized(())
-    };
+pub fn get_contacts (db: State<DBState>, jwt_key: State<DefaultJwtHandler>, cookies: Cookies) -> JsonResponse {
+    let user = (*jwt_key).verify_or_respond (cookies)?;
 
-    let reply = if let Ok(c) = users_contacts_join::table
+    let fetched = users_contacts_join::table
         .filter (users_contacts_join::user_id.eq(user.custom.user_id))
         .inner_join(contacts::table)
         .load::<((i64, i64), Contact)> (&**db) 
-    {
-        let strings = c.into_iter()
-            .map(|entry| serde_json::to_string(&entry.1))
-            .filter(|entry| entry.is_ok())
-            .map(|entry| entry.unwrap())
-            .collect::<Vec<String>>();
-        
-        if let Ok(reply) = serde_json::to_string(&strings) { reply } else {
-            return ContactsResponse::InternalServerError("Serialization failed".to_string ())
-        }
-    } else {
-        return ContactsResponse::InternalServerError("Query failed".to_string ())
-    };
+        .map_err(|_| Status::InternalServerError)?;
 
-    ContactsResponse::Success(reply)
+    JsonResponse::new(
+        &fetched.into_iter()
+            .map(|entry| entry.1)
+            .collect::<Vec<Contact>>()
+    )
 }
 
 #[post("/personas", format = "application/json", data = "<contacts>")]
-pub fn add_contacts (db: State<DBState>, jwt_key: State<JwtState>, contacts: Json<Vec<NewContact>>, cookies: Cookies) -> ContactsResponse {
-    let user = if let Ok(user) = (*jwt_key).verify (cookies) { user } else {
-        return ContactsResponse::Unauthorized(())
-    };
+pub fn add_contacts (db: State<DBState>, jwt_key: State<DefaultJwtHandler>, contacts: Json<Vec<NewContact>>, cookies: Cookies) -> JsonResponse {
+    let user = (*jwt_key).verify_or_respond (cookies)?;
 
     let results = (&*contacts)
             .into_iter ()
@@ -62,24 +53,20 @@ pub fn add_contacts (db: State<DBState>, jwt_key: State<JwtState>, contacts: Jso
             .collect::<Vec<Result<Contact, diesel::result::Error>>> ();
 
     if (&results).into_iter()
-                    .map(|result| match result {
-                        Ok(_) => None,
-                        Err(err) => Some(err)
-                    })
-                    .filter(|result| result.is_some())
-                    .take(1)
-                    .count() > 1 
+            .map(|result| match result {
+                Ok(_) => None,
+                Err(err) => Some(err)
+            })
+            .filter(|result| result.is_some())
+            .take(1)
+            .count() > 1 
     {
-        return ContactsResponse::InternalServerError("Failed to insert contacts to database".to_string ());
+        return Err(Status::InternalServerError);
     }
 
     let contacts = results.into_iter ()
         .map(|contact| contact.unwrap ())
         .collect::<Vec<Contact>> ();
 
-    let response = if let Ok(str) = serde_json::to_string(&contacts) { str } else {
-        return ContactsResponse::InternalServerError("Failed to serialize result".to_string ());
-    };
-
-    ContactsResponse::Success(response)
+    JsonResponse::new(&contacts)
 }

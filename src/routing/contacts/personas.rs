@@ -1,11 +1,12 @@
 use diesel::QueryDsl;
-use rocket::{State, http::Cookies, response::Redirect};
+use rocket::{State, http::{Cookies, Status}, response::Redirect};
 use rocket_contrib::json::Json;
-use crate::{db::{DBState, Register, contact::{Contact, NewContact}, persona::{NewPersona, Persona}, schema::{contacts, personas, users}, user::User}, jwt::JwtState};
+use crate::{db::{DBState, Register, contact::{Contact, NewContact}, persona::{NewPersona, Persona}, schema::{contacts, personas, users}, user::User}, verification::jwt::{DefaultJwtHandler}, routing::{EmptyResponse, JsonResponse, SUCCESS}};
 use crate::diesel::*;
 use serde::{Deserialize, Serialize};
+use crate::routing::JsonResponseNew;
 
-use super::ContactsResponse;
+use super::super::Verifier;
 
 #[derive(Queryable, Serialize, Deserialize)]
 struct FullPersona {
@@ -13,48 +14,38 @@ struct FullPersona {
     pub persona: Persona
 }
 
-#[get("/<user>/personas")]
-pub fn get_personas_of_user (db: State<DBState>, jwt_key: State<JwtState>, user: i64, cookies: Cookies) -> ContactsResponse {
-    let jwt = if let Ok(user) = (*jwt_key).verify (cookies) { user } else {
-        return ContactsResponse::Unauthorized(())
-    };
+#[get("/personas/<user>")]
+pub fn get_personas_of_user (db: State<DBState>, jwt_key: State<DefaultJwtHandler>, user: i64, cookies: Cookies) -> JsonResponse {
+    let jwt = (*jwt_key).verify_or_respond (cookies)?;
 
-    let user = if let Ok(user) = users::table
+    let user = users::table
         .filter(users::id.eq(user))
         .limit(1)
-        .load::<User> (&**db) 
-    { user[0].clone () } else {
-        return ContactsResponse::NotFound("Requested user was not found".to_string ())
-    };
+        .load::<User> (&**db)
+        .map_err(|_| Status::NotFound)?[0]
+        .clone ();
 
-    let reply = if let Ok(personas) = contacts::table
+    let personas = contacts::table
         .inner_join(personas::table)
         .filter(personas::user_id.eq(user.id))
-        .load::<FullPersona> (&**db) 
-    {
-        let personas = if user.id == jwt.custom.user_id { personas } else {
-            personas.into_iter()
-                .filter(|entry| entry.persona.private)
-                .collect::<Vec<FullPersona>>()
-        };
-        
-        if let Ok(reply) = serde_json::to_string(&personas) { reply } else {
-            return ContactsResponse::InternalServerError("Serialization failed".to_string ())
-        }
-    } else {
-        return ContactsResponse::InternalServerError("Query failed".to_string ())
+        .load::<FullPersona> (&**db)
+        .map_err (|_| Status::NotFound)?;
+
+    let personas = if user.id == jwt.custom.user_id { personas } else {
+        personas.into_iter()
+            .filter(|entry| entry.persona.private)
+            .collect::<Vec<FullPersona>>()
     };
 
-    ContactsResponse::Success(reply)
+    JsonResponse::new (&personas)
 }
 
 #[get("/personas")]
-pub fn get_personas (jwt_key: State<JwtState>, cookies: Cookies) -> Redirect {
-    let jwt = if let Ok(user) = (*jwt_key).verify (cookies) { user } else {
-        return Redirect::temporary("/login")
-    };
+pub fn get_personas (jwt_key: State<DefaultJwtHandler>, cookies: Cookies) -> Result<Redirect, Redirect> {
+    let jwt = (*jwt_key).verify_or_respond (cookies)
+        .map_err(|_| Redirect::temporary("/login"))?;
 
-    Redirect::found(format!("/{}/personas", jwt.custom.user_id))
+    Ok(Redirect::found(format!("/{}/personas", jwt.custom.user_id)))
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -72,19 +63,15 @@ impl PostPersona {
 }
 
 #[post("/personas", format = "application/json", data = "<persona>")]
-pub fn add_personas (db: State<DBState>, jwt_key: State<JwtState>, persona: Json<PostPersona>, cookies: Cookies) -> ContactsResponse {
-    let jwt = if let Ok(user) = (*jwt_key).verify (cookies) { user } else {
-        return ContactsResponse::Unauthorized(())
-    };
+pub fn add_personas (db: State<DBState>, jwt_key: State<DefaultJwtHandler>, persona: Json<PostPersona>, cookies: Cookies) -> EmptyResponse {
+    let jwt = (*jwt_key).verify_or_respond (cookies)?;
 
-    let contact = if let Ok (contact) = persona
+    persona
         .to_new_persona (jwt.custom.user_id)
         .register(&**db)
         .and_then(|persona| NewContact::new_default_from_persona (persona.id)
             .register(&**db))
-    { contact } else {
-        return ContactsResponse::InternalServerError("Failed to create persona contact".to_string ())
-    };
+        .map_err(|_| Status::InternalServerError)?;
 
-    ContactsResponse::Success(contact.id.to_string ())
+    SUCCESS
 }
