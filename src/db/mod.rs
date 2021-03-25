@@ -1,4 +1,4 @@
-use diesel::{Connection, Expression, Insertable, RunQueryDsl, Table, backend::SupportsReturningClause, insertable::CanInsertInSingleQuery, pg::PgConnection, query_builder::QueryFragment, types::HasSqlType};
+use diesel::{Connection, Expression, Insertable, QuerySource, RunQueryDsl, Table, insertable::CanInsertInSingleQuery, pg::PgConnection, query_builder::QueryFragment, types::HasSqlType};
 use std::env;
 
 pub mod schema;
@@ -8,7 +8,7 @@ pub mod contact;
 
 fn establish_connection() -> PgConnection {
 
-    let database_url = env::var("DB_URL")
+    let database_url = env::var("DATABASE_URL")
         .expect("DB_URL must be set");
     let connection = PgConnection::establish(&database_url[..])
         .expect(&format!("Error connecting to {}", database_url));
@@ -51,20 +51,23 @@ unsafe impl Sync for DBState {
     
 }
 
-pub trait Register<T: Table, DB: Connection = PgConnection>: Insertable<T> + Sized
-    where
-        T::FromClause: QueryFragment<DB::Backend>,
-        Self::Values: QueryFragment<DB::Backend> + CanInsertInSingleQuery<DB::Backend>,
-        DB::Backend: SupportsReturningClause,
-        T::AllColumns: QueryFragment<DB::Backend>,
-        DB::Backend: HasSqlType<<<T as diesel::Table>::AllColumns as diesel::Expression>::SqlType>
+pub type DefaultConnection = PgConnection;
+pub type DefaultBackend = <DefaultConnection as Connection>::Backend;
+
+pub trait Register: Insertable<Self::Table> + Sized 
+    where 
+    <Self::Table as QuerySource>::FromClause: QueryFragment<DefaultBackend>,
+    Self::Values: QueryFragment<DefaultBackend> + CanInsertInSingleQuery<DefaultBackend>,
+    <Self::Table as Table>::AllColumns: QueryFragment<DefaultBackend>,
+    DefaultBackend: HasSqlType<<<Self::Table as Table>::AllColumns as diesel::Expression>::SqlType>
 {
 
-    const TABLE: T;
+    type Table: Table;
+    const TABLE: Self::Table;
 
-    type Queryable: diesel::Queryable<<<T as diesel::Table>::AllColumns as Expression>::SqlType, DB::Backend>;
+    type Queryable: diesel::Queryable<<<Self::Table as diesel::Table>::AllColumns as Expression>::SqlType, <DefaultConnection as Connection>::Backend>;
 
-    fn register (self, db: &DB) -> Result<Self::Queryable, diesel::result::Error> {
+    fn register (self, db: &DefaultConnection) -> Result<Self::Queryable, diesel::result::Error> {
         diesel::insert_into(Self::TABLE)
             .values(self)
             .get_result::<Self::Queryable>(db)
@@ -75,7 +78,8 @@ pub trait Register<T: Table, DB: Connection = PgConnection>: Insertable<T> + Siz
 #[macro_export]
 macro_rules! impl_register_for {
     ($self:path, $query_type:path, $table:path) => {
-        impl crate::db::Register<$table> for $self {
+        impl crate::db::Register for $self {
+            type Table = $table;
             const TABLE: $table = $table;
             type Queryable = $query_type;
         }

@@ -1,27 +1,21 @@
-use crate::{db::{DBState, Register, persona::NewPersona, schema::users, user::{NewUser, Password, User}}, derive_password};
+use crate::{db::{DBState, Register, persona::NewPersona, user::{IsUser, NewUser, Password, User, UserDescriptor}}, derive_password, verification::jwt::{AUTH_COOKIE_NAME, JwtHandler, jwt_data::JwtData}};
 use crate::rocket::State;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, query_dsl::methods::FilterDsl};
 use rocket::{http::{Cookie, Cookies, Status}};
 use rocket_contrib::json::Json;
 use serde::{Serialize, Deserialize};
-use super::SUCCESS;
-use time;
-use crate::verification::{jwt::*, jwt::blacklist::JwtData};
+use super::{SUCCESS};
+use crate::verification::*;
 
 use super::EmptyResponse;
-
-pub const AUTH_COOKIE_NAME: &str = "authentication";
 
 #[post("/register", format = "application/json", data = "<user>")]
 pub fn register (user: Json<NewUser>, db: State<DBState>) -> EmptyResponse {
 
-    let users = FilterDsl::filter(users::table, users::username.eq(&user.username))
-        .limit(1)
-        .load::<User>(&**db)
-        .map_err(|_| Status::UnprocessableEntity)?;
-
-    if users.len () > 0 {
-        return Err(Status::UnprocessableEntity);
+    match User::query_by_username(&user.username, &**db) {
+        Ok(_) => return Err(Status::UnprocessableEntity),
+        Err(e) => if e != diesel::result::Error::NotFound {
+            return Err(Status::InternalServerError);
+        }
     }
 
     let user = user
@@ -48,20 +42,12 @@ pub struct Login {
 derive_password! (Login);
 
 #[post("/login", format = "application/json", data = "<user>")]
-pub fn login (user: Json<Login>, db: State<DBState>, jwt_key: State<DefaultJwtHandler>, mut cookies: Cookies) -> EmptyResponse {
+pub fn login (user: Json<Login>, db: State<DBState>, jwt_key: State<DefaultVerificationHandler>, cookies: Cookies) -> EmptyResponse {
 
     println! ("\t=> Logging in {}", user.username);
 
-    let users = FilterDsl::filter(users::table, users::username.eq(&user.username))
-        .limit(1)
-        .load::<User>(&**db)
-        .map_err(|_| Status::InternalServerError)?;
-
-    let dbuser = if users.len () < 1 {
-        return Err(Status::NotFound)
-    } else {
-        users[0].clone ()
-    };
+    let dbuser = User::query_by_username(&user.username, &**db)
+        .map_err(|_| Status::NotFound)?;
 
     println! ("\t=> Found in db: {}", dbuser.id);
 
@@ -79,27 +65,14 @@ pub fn login (user: Json<Login>, db: State<DBState>, jwt_key: State<DefaultJwtHa
 
     println! ("\t=> Password is correct");
 
-    let key = DefaultJwt::new_from_user (dbuser).encode (&jwt_key.key)
+    jwt_key.authorize(cookies, dbuser)
         .map_err(|_| Status::InternalServerError)?;
-
-    println! ("\t=> {}", (key));
-
-    cookies.add_private(Cookie::build (AUTH_COOKIE_NAME, key.clone ())
-        // .secure(true)
-        .http_only(true)
-        .expires({
-            let mut exp_date = time::now();
-            exp_date.tm_hour += 2;
-            exp_date
-        })
-        .finish()
-    );
 
     SUCCESS
 }
 
 #[post("/logout")]
-pub fn logout (jwt_key: State<DefaultJwtHandler>, mut cookies: Cookies) -> EmptyResponse {
+pub fn logout (jwt_key: State<DefaultVerificationHandler>, mut cookies: Cookies) -> EmptyResponse {
 
     let cookie = cookies.get_private(AUTH_COOKIE_NAME)
         .ok_or(Status::UnprocessableEntity)?;
@@ -114,4 +87,18 @@ pub fn logout (jwt_key: State<DefaultJwtHandler>, mut cookies: Cookies) -> Empty
     (&*jwt_key).blacklist(JwtData::new_from_claims (jwt, auth));
 
     SUCCESS
+}
+
+#[delete("/")]
+pub fn delete (jwt_key: State<DefaultVerificationHandler>, db: State<DBState>, cookies: Cookies) -> EmptyResponse {
+    let jwt = super::Verifier::verify_or_respond(&*jwt_key, cookies)?;
+
+    UserDescriptor(jwt.custom.user_id)
+        .delete(&**db)
+        .map_err(|e| match e {
+            diesel::result::Error::NotFound => Status::NotFound,
+            _ => Status::InternalServerError
+        })?;
+
+    Ok(())
 }

@@ -1,9 +1,10 @@
-use diesel::{PgConnection, QueryDsl, RunQueryDsl};
+use diesel::{QueryDsl, RunQueryDsl};
 use crate::{diesel::ExpressionMethods, impl_register_for};
 use serde::{Deserialize, Serialize};
-use super::{user::User};
+use super::{DefaultConnection, contact::Contact, user::User};
 use super::schema::personas;
 use super::schema::users;
+use super::schema::contacts;
 
 #[derive(Clone, Queryable, Serialize, Deserialize, Debug)]
 pub struct Persona {
@@ -23,14 +24,22 @@ pub struct NewPersona {
 
 trait IsPersona {
 
-    fn get_user_id (&self) -> i64;
+    fn user_id (&self) -> i64;
+    fn name (&self) -> &String;
 
-    fn get_user(&self, db: &PgConnection) -> Result<User, diesel::result::Error> {
+    fn get_user(&self, db: &DefaultConnection) -> Result<User, diesel::result::Error> {
         users::table
-            .filter(users::id.eq(self.get_user_id ()))
+            .filter(users::id.eq(self.user_id ()))
             .limit(1)
             .load::<User>(db)
             .map(|users| users[0].clone ())
+    }
+
+    fn get_contacts(&self, db: DefaultConnection) -> Result<Vec<(Contact, Persona)>, diesel::result::Error> {
+        contacts::table
+            .inner_join(personas::table)
+            .filter(personas::name.eq(self.name ()))
+            .load::<(Contact, Persona)> (&db)
     }
 
 }
@@ -51,19 +60,23 @@ impl NewPersona {
 
 }
 
-impl_register_for!(NewPersona, Persona, personas::table);
-
 macro_rules! impl_is_persona {
     ($self:path) => {
         impl IsPersona for $self {
 
-            fn get_user_id (&self) -> i64 {
+            fn user_id (&self) -> i64 {
                 self.user_id
+            }
+
+            fn name (&self) -> &String {
+                &self.name
             }
 
         }
     };
 }
+
+impl_register_for!(NewPersona, Persona, personas::table);
 
 impl_is_persona!(Persona);
 impl_is_persona!(NewPersona);

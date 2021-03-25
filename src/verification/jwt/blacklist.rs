@@ -1,59 +1,8 @@
-use std::{cmp::Ordering, sync::{Arc, Mutex, MutexGuard}, thread::{self, sleep}, time::{SystemTime, UNIX_EPOCH}};
-use jwt_simple::prelude::{Duration, JWTClaims, UnixTimeStamp};
+use std::{sync::{Arc, Mutex, MutexGuard}, thread::{self, sleep}, time::{SystemTime, UNIX_EPOCH}};
+use jwt_simple::prelude::{Duration, UnixTimeStamp};
 use sorted_vec::SortedVec;
-use std::cmp::Ord;
-use super::Jwt;
-
-#[derive(Debug)]
-pub struct JwtData {
-    pub expires: UnixTimeStamp,
-    pub token: String
-}
-
-impl JwtData {
-
-    pub fn new (expires: UnixTimeStamp, token: String) -> JwtData {
-        JwtData {
-            expires,
-            token
-        }
-    }
-
-    pub fn new_from_claims<'a> (claims: JWTClaims<impl Jwt>, token: String) -> JwtData {
-        Self::new (
-            claims.expires_at.unwrap_or(Duration::from_hours(2)),
-            token
-        )
-    }
-    
-}
-
-impl Ord for JwtData {
-
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.expires.cmp(&other.expires)
-    }
-
-}
-
-impl Eq for JwtData {
-
-}
-
-impl PartialOrd for JwtData {
-
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-
-}
-
-impl PartialEq for JwtData {
-
-    fn eq(&self, other: &Self) -> bool {
-        self.expires == other.expires
-    }
-}
+use crate::verification::Blacklist;
+use super::jwt_data::JwtData;
 
 #[derive(Clone)]
 pub struct ThreadBlacklist(Arc<Mutex<SortedVec<JwtData>>>);
@@ -112,20 +61,15 @@ impl ThreadBlacklist {
 
 }
 
-pub trait Blacklist: std::fmt::Display + Send + Sync {
-
-    fn blacklist (&self, jwt: JwtData);
-    fn contains (&self, token: &String) -> bool;
-
-}
-
 impl Blacklist for ThreadBlacklist {
+
+    type Data = JwtData;
 
     fn blacklist (&self, jwt: JwtData) {
         self.lock ().insert (jwt);
     }
 
-    fn contains (&self, token: &String) -> bool {
+    fn is_blacklisted (&self, token: &String) -> bool {
         self.lock ().iter ()
             .filter (|data| &data.token == token)
             .take(1)

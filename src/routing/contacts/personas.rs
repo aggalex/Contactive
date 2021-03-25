@@ -1,43 +1,23 @@
-use diesel::QueryDsl;
 use rocket::{State, http::{Cookies, Status}, response::Redirect};
 use rocket_contrib::json::Json;
-use crate::{db::{DBState, Register, contact::{Contact, NewContact}, persona::{NewPersona, Persona}, schema::{contacts, personas, users}, user::User}, verification::jwt::{DefaultJwtHandler}, routing::{EmptyResponse, JsonResponse, SUCCESS}};
-use crate::diesel::*;
+use crate::{db::{DBState, Register, contact::NewContact, persona::NewPersona, user::{IsUser, User}}, routing::{EmptyResponse, JsonResponse, SUCCESS}, verification::jwt::{DefaultJwtHandler}};
 use serde::{Deserialize, Serialize};
-use crate::routing::JsonResponseNew;
-
+use crate::routing::ToJson;
 use super::super::Verifier;
-
-#[derive(Queryable, Serialize, Deserialize)]
-struct FullPersona {
-    pub contact: Contact,
-    pub persona: Persona
-}
 
 #[get("/personas/<user>")]
 pub fn get_personas_of_user (db: State<DBState>, jwt_key: State<DefaultJwtHandler>, user: i64, cookies: Cookies) -> JsonResponse {
     let jwt = (*jwt_key).verify_or_respond (cookies)?;
 
-    let user = users::table
-        .filter(users::id.eq(user))
-        .limit(1)
-        .load::<User> (&**db)
-        .map_err(|_| Status::NotFound)?[0]
-        .clone ();
+    let user = User::query_by_id(user, &**db)
+        .map_err(|_| Status::NotFound)?;
 
-    let personas = contacts::table
-        .inner_join(personas::table)
-        .filter(personas::user_id.eq(user.id))
-        .load::<FullPersona> (&**db)
-        .map_err (|_| Status::NotFound)?;
-
-    let personas = if user.id == jwt.custom.user_id { personas } else {
-        personas.into_iter()
-            .filter(|entry| entry.persona.private)
-            .collect::<Vec<FullPersona>>()
-    };
-
-    JsonResponse::new (&personas)
+    if user.id == jwt.custom.user_id { 
+        user.get_personas (&**db) 
+    } else {
+        user.get_public_personas (&**db)
+    }.map_err(|_| Status::InternalServerError)?
+            .to_json()
 }
 
 #[get("/personas")]

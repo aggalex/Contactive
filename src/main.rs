@@ -1,4 +1,4 @@
-#![feature(proc_macro_hygiene, decl_macro, associated_type_defaults)]
+#![feature(proc_macro_hygiene, decl_macro)]
 #![recursion_limit="512"]
 
 use dotenv::dotenv;
@@ -20,7 +20,9 @@ pub mod db;
 pub mod routing;
 pub mod verification;
 
+mod tests;
+
 fn main() {
     dotenv().ok();
-    routing::start ()
+    routing::start ().launch ();
 }

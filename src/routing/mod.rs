@@ -1,7 +1,7 @@
-use rocket::http::{Cookies, Status};
+use rocket::{Rocket, http::{Cookies, Status}};
 use serde::Serialize;
 
-use crate::verification::jwt::JwtHandlerWithThreadBlacklist;
+use crate::verification::DefaultVerificationHandler;
 
 pub mod user;
 pub mod contacts;
@@ -11,19 +11,20 @@ fn root() -> String {
     format!("Welcome to Rocket on Rust")
 }
 
-pub fn start () {
+pub fn start () -> Rocket {
     rocket::ignite()
     .manage(crate::db::DBState::new ())
-    .manage(JwtHandlerWithThreadBlacklist::new ())
+    .manage(DefaultVerificationHandler::new ())
     .mount("/", routes![
         root,
         user::register,
         user::login,
         user::logout,
+        user::delete,
         contacts::get_contacts,
         contacts::personas::get_personas,
         contacts::personas::get_personas_of_user
-    ]).launch();
+    ])
 }
 
 #[derive(Responder)]
@@ -44,6 +45,16 @@ impl JsonResponseNew for JsonResponse {
     }
 
 }
+
+trait ToJson: Serialize {
+
+    fn to_json (&self) -> JsonResponse {
+        JsonResponse::new(self)
+    }
+
+}
+
+impl<T: ?Sized + Serialize> ToJson for T {}
 
 type EmptyResponse = Result<(), Status>;
 

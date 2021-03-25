@@ -1,14 +1,15 @@
-use blacklist::Blacklist;
 use jwt_simple::prelude::{Claims, Duration, HS256Key, JWTClaims, MACLike};
 use rocket::http::{Cookie, Cookies};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::db::user::User;
+use crate::db::user::{self, User};
 
-use self::blacklist::{JwtData, ThreadBlacklist};
+use self::blacklist::ThreadBlacklist;
+use self::jwt_data::JwtData;
 
-use super::Verifier;
+use super::{Blacklist, Verifier};
 
+pub mod jwt_data;
 pub mod blacklist;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -66,19 +67,11 @@ pub struct JwtHandlerWithThreadBlacklist {
     pub blacklist: ThreadBlacklist
 }
 
-pub trait JwtHandler<J: Jwt>: Verifier<Ok = JWTClaims<J>, Err = jwt_simple::Error> {
+pub trait JwtHandler<J: Jwt>: Verifier<Data = JwtData, Ok = JWTClaims<J>, Err = jwt_simple::Error> {
 
     fn extract(&self, token: &String) ->  Result<Self::Ok, Self::Err>;
     fn cookie_extract (&self, cookie: Cookie) ->  Result<Self::Ok, Self::Err>;
 
-}
-
-#[macro_export]
-macro_rules! jwt_handler_default_ok_err {
-    ($jwt: path) => {
-        type Ok = JWTClaims<$jwt>;
-        type Err = jwt_simple::Error;    
-    };
 }
 
 impl JwtHandlerWithThreadBlacklist {
@@ -88,11 +81,6 @@ impl JwtHandlerWithThreadBlacklist {
             key: HS256Key::from_bytes("abcd".as_bytes()),
             blacklist: ThreadBlacklist::new ()
         }
-    }
-
-    pub fn blacklist (&self, jwt: JwtData) {
-        self.blacklist.blacklist(jwt);
-        println!("{}", self.blacklist);
     }
 
 }
@@ -105,7 +93,7 @@ impl JwtHandler<SimpleJwt> for JwtHandlerWithThreadBlacklist {
             Err(err) => return Err(err)
         };
         
-        if self.blacklist.contains (token) {
+        if self.blacklist.is_blacklisted (token) {
             return Err(jwt_simple::Error::msg ("Token is blacklisted"));
         };
 
@@ -118,17 +106,54 @@ impl JwtHandler<SimpleJwt> for JwtHandlerWithThreadBlacklist {
 
 }
 
+impl Blacklist for JwtHandlerWithThreadBlacklist {
+
+    type Data = JwtData;
+
+    fn blacklist (&self, data: Self::Data) {
+        self.blacklist.blacklist(data)
+    }
+
+    fn is_blacklisted (&self, token: &String) -> bool {
+        self.blacklist.is_blacklisted(token)
+    }
+}
+
+pub const AUTH_COOKIE_NAME: &str = "authentication";
+
 impl Verifier for JwtHandlerWithThreadBlacklist {
 
-    jwt_handler_default_ok_err! (SimpleJwt);
+    type User = user::User;
+
+    type Ok = JWTClaims<SimpleJwt>;
+
+    type Err = jwt_simple::Error;
 
     fn verify (&self, mut cookies: Cookies) -> Result<JWTClaims<SimpleJwt>, jwt_simple::Error> {
-        match cookies.get_private(crate::routing::user::AUTH_COOKIE_NAME) {
+        match cookies.get_private(AUTH_COOKIE_NAME) {
             Some(cookie) => self.cookie_extract(cookie),
             None => Err(jwt_simple::Error::msg("Unauthorized"))
         }
     }
 
+    fn authorize (&self, mut cookies: Cookies, user: User) -> Result<Self::Ok, Self::Err> {
+        let key = DefaultJwt::new_from_user (user).encode (&self.key)?;
+
+        println! ("\t=> {}", (key));
+
+        cookies.add_private(Cookie::build (AUTH_COOKIE_NAME, key.clone ())
+            // .secure(true)
+            .http_only(true)
+            .expires({
+                let mut exp_date = time::now();
+                exp_date.tm_hour += 2;
+                exp_date
+            })
+            .finish()
+        );
+
+        self.verify(cookies)
+    }
 }
 
 pub type DefaultJwtHandler = JwtHandlerWithThreadBlacklist;
