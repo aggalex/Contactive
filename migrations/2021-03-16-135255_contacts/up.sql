@@ -3,7 +3,8 @@ CREATE TABLE users (
   id BIGSERIAL PRIMARY KEY,
   username VARCHAR(64) NOT NULL,
   email VARCHAR(64) NOT NULL,
-  password VARCHAR(64) NOT NULL
+  password VARCHAR(64) NOT NULL,
+  level INTEGER NOT NULL
 );
 
 CREATE TABLE personas (
@@ -22,7 +23,6 @@ CREATE TABLE personas (
 CREATE TABLE contacts (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(64) NOT NULL,
-    birthday DATE,
     icon BYTEA,
     persona BIGINT NULL UNIQUE,
 
@@ -45,76 +45,14 @@ CREATE TABLE users_contacts_join (
         ON DELETE CASCADE 
 );
 
-CREATE TABLE phones (
-    id BIGSERIAL PRIMARY KEY,
-    phone VARCHAR(64) NOT NULL,
-    contact_id BIGINT NOT NULL UNIQUE,
+CREATE TABLE info (
+    key VARCHAR(64) NOT NULL,
+    value VARCHAR(512) NOT NULL,
+    contact_id BIGINT NOT NULL,
 
-    FOREIGN KEY (contact_id) 
-        REFERENCES contacts(id) 
-        ON DELETE CASCADE
-);
+    PRIMARY KEY (key, value, contact_id),
 
-CREATE TABLE emails (
-    id BIGSERIAL PRIMARY KEY,
-    email VARCHAR(64) NOT NULL,
-    contact_id BIGINT NOT NULL UNIQUE,
-
-    FOREIGN KEY (contact_id) 
-        REFERENCES contacts(id) 
-        ON DELETE CASCADE
-);
-
-CREATE TABLE notes (
-    id BIGSERIAL PRIMARY KEY,
-    note TEXT NOT NULL,
-    contact_id BIGINT NOT NULL UNIQUE,
-
-    FOREIGN KEY (contact_id) 
-        REFERENCES contacts(id) 
-        ON DELETE CASCADE
-);
-
-CREATE TABLE social_media (
-    id BIGSERIAL PRIMARY KEY,
-    link VARCHAR(64) NOT NULL,
-    type VARCHAR(64) NOT NULL,
-    contact_id BIGINT NOT NULL UNIQUE,
-
-    FOREIGN KEY (contact_id) 
-        REFERENCES contacts(id) 
-        ON DELETE CASCADE
-);
-
-CREATE TABLE websites (
-    id BIGSERIAL PRIMARY KEY,
-    link VARCHAR(64) NOT NULL,
-    contact_id BIGINT NOT NULL UNIQUE,
-
-    FOREIGN KEY (contact_id) 
-        REFERENCES contacts(id) 
-        ON DELETE CASCADE
-);
-
-CREATE TABLE addresses (
-    id BIGSERIAL PRIMARY KEY,
-    street VARCHAR(64),
-    locality VARCHAR(64),
-    postal_code INT,
-    country VARCHAR(64),
-    contact_id BIGINT NOT NULL UNIQUE,
-
-    FOREIGN KEY (contact_id) 
-        REFERENCES contacts(id) 
-        ON DELETE CASCADE
-);
-
-CREATE TABLE anniversaries (
-    id BIGSERIAL PRIMARY KEY,
-    date DATE NOT NULL,
-    contact_id BIGINT NOT NULL UNIQUE,
-
-    FOREIGN KEY (contact_id) 
-        REFERENCES contacts(id) 
+    FOREIGN KEY (contact_id)
+        REFERENCES contacts(id)
         ON DELETE CASCADE
 );

@@ -1,6 +1,5 @@
-use rocket::http::Cookies;
-
-use self::jwt::DefaultJwtHandler;
+use crate::routing::ToStatus;
+use std::error::Error;
 
 pub mod jwt;
 pub trait Blacklist: Send + Sync {
@@ -13,14 +12,15 @@ pub trait Blacklist: Send + Sync {
 }
 pub trait Verifier: Blacklist {
 
-    type User;
+    type Data;
 
     type Ok;
-    type Err;
+    type Err: ToStatus + std::fmt::Debug;
 
-    fn verify (&self, cookies: Cookies) -> Result<Self::Ok, Self::Err>;
-    fn authorize (&self, cookies: Cookies, user: Self::User) -> Result<Self::Ok, Self::Err>;
+    type Source;
+    type Destination = Self::Source;
+
+    fn verify (&self, source: &mut Self::Source) -> Result<Self::Ok, Self::Err>;
+    fn authorize (&self, destination: &mut Self::Destination, data: <Self as Verifier>::Data) -> Result<(), Box<dyn Error>>;
 
 }
-
-pub type DefaultVerificationHandler = DefaultJwtHandler;

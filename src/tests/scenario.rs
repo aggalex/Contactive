@@ -3,6 +3,7 @@ use crate::{db::user::NewUser, routing::user::Login};
 
 pub type AnyError = Box<dyn std::error::Error + 'static>;
 
+#[allow(dead_code)]
 pub fn test_user () -> NewUser {
     NewUser::new (
         "aggelalex".to_string (),
@@ -43,6 +44,7 @@ pub trait ClientActions {
     fn register_user (&self, user: &NewUser) -> Result<(), AnyError>;
     fn login (&self, user: &Login) -> Result<(), AnyError>;
     fn delete_user (&self) -> Result<(), AnyError>;
+    fn add_contacts (&self) -> Result<(), AnyError>;
 }
 
 impl ClientActions for Client {
@@ -72,5 +74,9 @@ impl ClientActions for Client {
             .dispatch()
             .status()
             .check()?)
+    }
+
+    fn add_contacts (&self) -> Result<(), AnyError> {
+        todo!()
     }
 }

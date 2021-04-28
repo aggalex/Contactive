@@ -3,6 +3,7 @@ use jwt_simple::prelude::{Duration, UnixTimeStamp};
 use sorted_vec::SortedVec;
 use crate::verification::Blacklist;
 use super::jwt_data::JwtData;
+use std::thread::JoinHandle;
 
 #[derive(Clone)]
 pub struct ThreadBlacklist(Arc<Mutex<SortedVec<JwtData>>>);
@@ -26,7 +27,7 @@ impl ThreadBlacklist {
         }
     }
 
-    fn start_gc (&mut self) {
+    fn start_gc (&mut self) -> JoinHandle<()> {
         let this = self.clone ();
         thread::spawn (move || {
             loop {
@@ -42,7 +43,7 @@ impl ThreadBlacklist {
                             .expect ("Time went backwards")
                             .as_secs()
                     );
-                    
+
                     for auth in (&**queue).into_iter() {
                         if auth.expires < now {
                             to_delete += 1;
@@ -56,7 +57,7 @@ impl ThreadBlacklist {
                     }
                 }
             }
-        });
+        })
     }
 
 }

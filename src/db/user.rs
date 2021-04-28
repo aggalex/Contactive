@@ -3,7 +3,7 @@ use diesel::{QueryDsl, RunQueryDsl};
 use serde::{Serialize, Deserialize};
 use bcrypt::{BcryptError, DEFAULT_COST, hash, verify};
 use sha2::{Digest, Sha512};
-use crate::{diesel::ExpressionMethods, impl_register_for};
+use crate::{diesel::ExpressionMethods, impl_query_by_id, impl_register_for};
 
 #[derive(Clone, Queryable, Debug)]
 pub struct User {
@@ -11,6 +11,7 @@ pub struct User {
     pub username: String,
     pub email: String,
     pub password: String,
+    pub level: i32
 }
 
 impl User {
@@ -22,13 +23,9 @@ impl User {
             .first::<User> (db)
     }
 
-    pub fn query_by_id(id: i64, db: &DefaultConnection) -> Result<User, diesel::result::Error> {
-        users::table
-            .find (id)
-            .first::<User> (db)
-    }
-
 }
+
+impl_query_by_id!(User => users::table);
 
 #[derive(Clone, Insertable, Serialize, Deserialize, Debug)]
 #[table_name="users"]
@@ -36,10 +33,11 @@ pub struct NewUser {
     pub username: String,
     pub email: String,
     pub password: String,
+    pub level: i32
 }
 
 impl NewUser {
-    pub fn new(username: String, email: String, password: String) -> Self { Self { username, email, password } }
+    pub fn new(username: String, email: String, password: String) -> Self { Self { username, email, password, level: 0 } }
 }
 
 pub trait Password: Clone {

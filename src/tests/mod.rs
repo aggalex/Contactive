@@ -28,11 +28,11 @@ mod test {
         dotenv().ok();
 
         let server = start();
-        assert!(Client::new(server).unwrap()
-            .post("/login")
-            .body(r#"{"username":"wrong"}"#)
-            .header(ContentType::JSON)
-            .dispatch()
-            .status() == Status::UnprocessableEntity)
+        assert_eq!(Client::new(server).unwrap()
+                       .post("/login")
+                       .body(r#"{"username":"wrong"}"#)
+                       .header(ContentType::JSON)
+                       .dispatch()
+                       .status(), Status::UnprocessableEntity)
     }
 }

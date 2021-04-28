@@ -1,5 +1,8 @@
-use diesel::{Connection, Expression, Insertable, QuerySource, RunQueryDsl, Table, insertable::CanInsertInSingleQuery, pg::PgConnection, query_builder::QueryFragment, types::HasSqlType};
+use diesel::{Connection, Expression, Insertable, QuerySource, RunQueryDsl, Table, insertable::CanInsertInSingleQuery, pg::PgConnection, query_builder::QueryFragment, result::Error, types::HasSqlType};
+use rocket::http::Status;
 use std::env;
+
+use crate::routing::ToStatus;
 
 pub mod schema;
 pub mod user;
@@ -73,6 +76,82 @@ pub trait Register: Insertable<Self::Table> + Sized
             .get_result::<Self::Queryable>(db)
     }
     
+}
+
+pub trait QueryById: Sized {
+
+    fn query_by_id (id: i64, db: &DefaultConnection) -> Result<Self, diesel::result::Error>; 
+
+}
+
+#[macro_export]
+macro_rules! impl_query_by_id {
+    ($self:path => $table:path) => {
+        impl crate::db::QueryById for $self {
+            fn query_by_id (id: i64, db: &DefaultConnection) -> Result<Self, diesel::result::Error> {
+                $table
+                    .find (id)
+                    .first::<Self> (db)
+            }
+        }
+    };
+}
+
+pub trait ConjuctionTable: Register
+    where 
+    <Self::Table as QuerySource>::FromClause: QueryFragment<DefaultBackend>,
+    Self::Values: QueryFragment<DefaultBackend> + CanInsertInSingleQuery<DefaultBackend>,
+    <Self::Table as Table>::AllColumns: QueryFragment<DefaultBackend>,
+    DefaultBackend: HasSqlType<<<Self::Table as Table>::AllColumns as diesel::Expression>::SqlType>,
+
+    <<Self::A as Register>::Table as QuerySource>::FromClause: QueryFragment<DefaultBackend>,
+    <Self::A as Insertable<<Self::A as Register>::Table>>::Values: QueryFragment<DefaultBackend> + CanInsertInSingleQuery<DefaultBackend>,
+    <<Self::A as Register>::Table as Table>::AllColumns: QueryFragment<DefaultBackend>,
+    DefaultBackend: HasSqlType<<<<Self::A as Register>::Table as Table>::AllColumns as diesel::Expression>::SqlType>,
+    <Self::A as Register>::Queryable: QueryById,
+
+    <<Self::B as Register>::Table as QuerySource>::FromClause: QueryFragment<DefaultBackend>,
+    <Self::B as Insertable<<Self::B as Register>::Table>>::Values: QueryFragment<DefaultBackend> + CanInsertInSingleQuery<DefaultBackend>,
+    <<Self::B as Register>::Table as Table>::AllColumns: QueryFragment<DefaultBackend>,
+    DefaultBackend: HasSqlType<<<<Self::B as Register>::Table as Table>::AllColumns as diesel::Expression>::SqlType>,
+    <Self::B as Register>::Queryable: QueryById
+
+{
+
+    type A: Register + Sized;
+    type B: Register + Sized;
+
+    fn as_tuple (&self) -> (i64, i64);
+
+    fn get_both(&self, db: &DefaultConnection) -> Result<(<Self::A as Register>::Queryable, <Self::B as Register>::Queryable), diesel::result::Error> {
+        let (aid, bid) = self.as_tuple ();
+        let a = <<Self::A as Register>::Queryable as QueryById>::query_by_id (aid, db)?;
+        let b = <<Self::B as Register>::Queryable as QueryById>::query_by_id (bid, db)?;
+        Ok((a, b))
+    }
+
+}
+
+impl ToStatus for Error {
+    fn to_status (&self) -> Status {
+        match self {
+            Error::InvalidCString(_) => Status::InternalServerError,
+            Error::DatabaseError(kind, _) => match kind {
+                diesel::result::DatabaseErrorKind::UniqueViolation => Status::UnprocessableEntity,
+                diesel::result::DatabaseErrorKind::ForeignKeyViolation => Status::UnprocessableEntity,
+                diesel::result::DatabaseErrorKind::UnableToSendCommand => Status::InternalServerError,
+                diesel::result::DatabaseErrorKind::SerializationFailure => Status::InternalServerError,
+                diesel::result::DatabaseErrorKind::__Unknown => Status::InternalServerError
+            }
+            Error::NotFound => Status::NotFound,
+            Error::QueryBuilderError(_) => Status::InternalServerError,
+            Error::DeserializationError(_) => Status::InternalServerError,
+            Error::SerializationError(_) => Status::InternalServerError,
+            Error::RollbackTransaction => Status::Ok,
+            Error::AlreadyInTransaction => Status::InternalServerError,
+            Error::__Nonexhaustive => Status::InternalServerError,
+        }
+    }
 }
 
 #[macro_export]

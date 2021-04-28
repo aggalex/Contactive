@@ -1,10 +1,8 @@
 use diesel::{QueryDsl, RunQueryDsl};
-use crate::{diesel::ExpressionMethods, impl_register_for};
+use crate::{diesel::ExpressionMethods, impl_query_by_id, impl_register_for};
 use serde::{Deserialize, Serialize};
 use super::{DefaultConnection, contact::Contact, user::User};
-use super::schema::personas;
-use super::schema::users;
-use super::schema::contacts;
+use super::schema::*;
 
 #[derive(Clone, Queryable, Serialize, Deserialize, Debug)]
 pub struct Persona {
@@ -13,6 +11,8 @@ pub struct Persona {
     pub private: bool,
     pub user_id: i64
 }
+
+impl_query_by_id!(Persona => personas::table);
 
 #[derive(Clone, Insertable, Serialize, Deserialize, Debug)]
 #[table_name="personas"]

@@ -1,8 +1,10 @@
-use jwt_simple::prelude::{Claims, Duration, HS256Key, JWTClaims, MACLike};
-use rocket::http::{Cookie, Cookies};
+use std::{marker::PhantomData, error::Error};
+
+use jwt_simple::{prelude::{Claims, Duration, HS256Key, JWTClaims, MACLike}};
+use rocket::http::{Cookie, Cookies, Status};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::db::user::{self, User};
+use crate::{db::user::{self, User}, routing::ToStatus};
 
 use self::blacklist::ThreadBlacklist;
 use self::jwt_data::JwtData;
@@ -11,14 +13,15 @@ use super::{Blacklist, Verifier};
 
 pub mod jwt_data;
 pub mod blacklist;
+pub mod persona_jwt;
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct SimpleJwt {
+pub struct LoginJwt {
     pub username: String,
     pub user_id: i64,
 }
 
-impl SimpleJwt {
+impl LoginJwt {
 
     pub fn new (username: String, user_id: i64) -> Self {
         Self {
@@ -42,7 +45,7 @@ pub trait Jwt: Clone + Serialize + DeserializeOwned + PartialEq {
 
 }
 
-impl Jwt for SimpleJwt {
+impl Jwt for LoginJwt {
 
     fn encode<Key: MACLike> (&self, key: &Key) -> Result<String, jwt_simple::Error> {
         key.authenticate(
@@ -55,40 +58,41 @@ impl Jwt for SimpleJwt {
 
 }
 
-impl PartialEq for SimpleJwt {
+impl PartialEq for LoginJwt {
 
-    fn eq(&self, other: &SimpleJwt) -> bool {
+    fn eq(&self, other: &LoginJwt) -> bool {
         self.username == other.username 
     }
 }
 
-pub struct JwtHandlerWithThreadBlacklist {
+pub trait JwtHandler<Source, J: Jwt>: Verifier<Ok = JWTClaims<J>, Err = jwt_simple::Error> {
+
+    fn extract(&self, token: Source) ->  Result<Self::Ok, Self::Err>;
+
+}
+
+pub struct LoginHandler<'a> {
     pub key: HS256Key,
-    pub blacklist: ThreadBlacklist
+    pub blacklist: ThreadBlacklist,
+    phantom: PhantomData<&'a ()>
 }
 
-pub trait JwtHandler<J: Jwt>: Verifier<Data = JwtData, Ok = JWTClaims<J>, Err = jwt_simple::Error> {
-
-    fn extract(&self, token: &String) ->  Result<Self::Ok, Self::Err>;
-    fn cookie_extract (&self, cookie: Cookie) ->  Result<Self::Ok, Self::Err>;
-
-}
-
-impl JwtHandlerWithThreadBlacklist {
+impl<'a> LoginHandler<'a> {
 
     pub fn new () -> Self {
         Self {
             key: HS256Key::from_bytes("abcd".as_bytes()),
-            blacklist: ThreadBlacklist::new ()
+            blacklist: ThreadBlacklist::new (),
+            phantom: PhantomData
         }
     }
 
 }
 
-impl JwtHandler<SimpleJwt> for JwtHandlerWithThreadBlacklist {
+impl<'a> JwtHandler<&String, LoginJwt> for LoginHandler<'a> {
 
-    fn extract (&self, token: &String) -> Result<JWTClaims<SimpleJwt>, jwt_simple::Error> {
-        let claims = match self.key.verify_token::<SimpleJwt> (token, None) {
+    fn extract (&self, token: &String) -> Result<JWTClaims<LoginJwt>, jwt_simple::Error> {
+        let claims = match self.key.verify_token::<LoginJwt> (token, None) {
             Ok(claims) => claims,
             Err(err) => return Err(err)
         };
@@ -100,13 +104,17 @@ impl JwtHandler<SimpleJwt> for JwtHandlerWithThreadBlacklist {
         Ok(claims)    
     }
 
-    fn cookie_extract (&self, cookie: Cookie) -> Result<JWTClaims<SimpleJwt>, jwt_simple::Error> {
+}
+
+impl<'a, 'c> JwtHandler<Cookie<'c>, LoginJwt> for LoginHandler<'a> {
+
+    fn extract(&self, cookie: Cookie<'c>) -> Result<JWTClaims<LoginJwt>, jwt_simple::Error> {
         self.extract(&cookie.value ().to_string ())
     }
 
 }
 
-impl Blacklist for JwtHandlerWithThreadBlacklist {
+impl<'a> Blacklist for LoginHandler<'a> {
 
     type Data = JwtData;
 
@@ -121,28 +129,30 @@ impl Blacklist for JwtHandlerWithThreadBlacklist {
 
 pub const AUTH_COOKIE_NAME: &str = "authentication";
 
-impl Verifier for JwtHandlerWithThreadBlacklist {
+impl<'a> Verifier for LoginHandler<'a> {
 
-    type User = user::User;
+    type Data = user::User;
 
-    type Ok = JWTClaims<SimpleJwt>;
+    type Ok = JWTClaims<LoginJwt>;
 
     type Err = jwt_simple::Error;
 
-    fn verify (&self, mut cookies: Cookies) -> Result<JWTClaims<SimpleJwt>, jwt_simple::Error> {
+    type Source = Cookies<'a>;
+
+    fn verify (&self, cookies: &mut Cookies) -> Result<JWTClaims<LoginJwt>, jwt_simple::Error> {
         match cookies.get_private(AUTH_COOKIE_NAME) {
-            Some(cookie) => self.cookie_extract(cookie),
+            Some(cookie) => self.extract(cookie),
             None => Err(jwt_simple::Error::msg("Unauthorized"))
         }
     }
 
-    fn authorize (&self, mut cookies: Cookies, user: User) -> Result<Self::Ok, Self::Err> {
-        let key = DefaultJwt::new_from_user (user).encode (&self.key)?;
+    fn authorize (&self, cookies: &mut Cookies, user: User) -> Result<(), Box<dyn Error>> {
+        let key = LoginJwt::new_from_user (user).encode (&self.key)?;
 
         println! ("\t=> {}", (key));
 
         cookies.add_private(Cookie::build (AUTH_COOKIE_NAME, key.clone ())
-            // .secure(true)
+            // .secure(true)        // WORKS ONLY WITH HTTPS
             .http_only(true)
             .expires({
                 let mut exp_date = time::now();
@@ -152,9 +162,12 @@ impl Verifier for JwtHandlerWithThreadBlacklist {
             .finish()
         );
 
-        self.verify(cookies)
+        Ok(())
     }
 }
 
-pub type DefaultJwtHandler = JwtHandlerWithThreadBlacklist;
-pub type DefaultJwt = SimpleJwt;
+impl ToStatus for jwt_simple::Error {
+    fn to_status (&self) -> rocket::http::Status {
+        Status::InternalServerError
+    }
+}

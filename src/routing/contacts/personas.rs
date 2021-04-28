@@ -1,28 +1,30 @@
 use rocket::{State, http::{Cookies, Status}, response::Redirect};
 use rocket_contrib::json::Json;
-use crate::{db::{DBState, Register, contact::NewContact, persona::NewPersona, user::{IsUser, User}}, routing::{EmptyResponse, JsonResponse, SUCCESS}, verification::jwt::{DefaultJwtHandler}};
+use crate::{db::{DBState, QueryById, Register, contact::{Contact, IsContact, NewContact, UserContactRelation}, persona::{NewPersona, Persona}, user::{IsUser, User}}, routing::{JsonResponse}, verification::jwt::{Jwt, JwtHandler, LoginHandler, persona_jwt::{PersonaJwt, PersonaJwtHandler}}};
 use serde::{Deserialize, Serialize};
 use crate::routing::ToJson;
 use super::super::Verifier;
+use crate::routing::StatusCatch;
 
 #[get("/personas/<user>")]
-pub fn get_personas_of_user (db: State<DBState>, jwt_key: State<DefaultJwtHandler>, user: i64, cookies: Cookies) -> JsonResponse {
-    let jwt = (*jwt_key).verify_or_respond (cookies)?;
+pub fn get_personas_of_user (db: State<DBState>, jwt_key: State<LoginHandler>, user: i64, mut cookies: Cookies) -> JsonResponse {
+    let jwt = (*jwt_key).verify_or_respond (&mut cookies)?;
 
     let user = User::query_by_id(user, &**db)
-        .map_err(|_| Status::NotFound)?;
+        .to_status()?;
 
     if user.id == jwt.custom.user_id { 
         user.get_personas (&**db) 
     } else {
         user.get_public_personas (&**db)
-    }.map_err(|_| Status::InternalServerError)?
-            .to_json()
+    }
+        .to_status()?
+        .to_json()
 }
 
 #[get("/personas")]
-pub fn get_personas (jwt_key: State<DefaultJwtHandler>, cookies: Cookies) -> Result<Redirect, Redirect> {
-    let jwt = (*jwt_key).verify_or_respond (cookies)
+pub fn get_personas (jwt_key: State<LoginHandler>, mut cookies: Cookies) -> Result<Redirect, Redirect> {
+    let jwt = (*jwt_key).verify_or_respond (&mut cookies)
         .map_err(|_| Redirect::temporary("/login"))?;
 
     Ok(Redirect::found(format!("/{}/personas", jwt.custom.user_id)))
@@ -42,16 +44,57 @@ impl PostPersona {
 
 }
 
-#[post("/personas", format = "application/json", data = "<persona>")]
-pub fn add_personas (db: State<DBState>, jwt_key: State<DefaultJwtHandler>, persona: Json<PostPersona>, cookies: Cookies) -> EmptyResponse {
-    let jwt = (*jwt_key).verify_or_respond (cookies)?;
+#[post("/personas", format = "application/json", data = "<personas>")]
+pub fn add_personas (db: State<DBState>, jwt_key: State<LoginHandler>, personas: Json<Vec<PostPersona>>, mut cookies: Cookies) -> JsonResponse {
+    let jwt = (*jwt_key).verify_or_respond (&mut cookies)?;
 
-    persona
-        .to_new_persona (jwt.custom.user_id)
-        .register(&**db)
-        .and_then(|persona| NewContact::new_default_from_persona (persona.id)
-            .register(&**db))
-        .map_err(|_| Status::InternalServerError)?;
+    (&*personas).into_iter().map(|persona| {
+        persona
+            .to_new_persona (jwt.custom.user_id)
+            .register(&db)
+            .and_then(|persona| NewContact::new_default_from_persona (persona.id)
+                .register(&db))
+    })   
+    .collect::<Result<Vec<Contact>, _>> ()
+    .to_status ()?
+    .to_json()
+}
 
-    SUCCESS
+#[get("/personas?<key>")]
+pub fn get_persona_by_key (db: State<DBState>, jwt_key: State<LoginHandler>, persona_key: State<PersonaJwtHandler>, key: String, mut cookies: Cookies) -> JsonResponse {
+    let jwt = (*jwt_key).verify_or_respond (&mut cookies)?;
+
+    let persona_id = (*persona_key).extract (&key)
+        .to_status()?
+        .custom.0;
+
+    let contact = Contact::of_persona(persona_id, &db)
+        .to_status()?;
+
+    UserContactRelation (
+        jwt.custom.user_id,
+        contact.id
+    ).register (&db)
+    .to_status()?;
+
+    contact
+        .get_all_info (&db)
+        .to_status()?
+        .to_json()
+}
+
+#[get("/personas/key?<id>")]
+pub fn get_key_for_persona (db: State<DBState>, jwt_key: State<LoginHandler>, persona_key: State<PersonaJwtHandler>, id: i64, mut cookies: Cookies) -> JsonResponse {
+    let jwt = (*jwt_key).verify_or_respond(&mut cookies)?;
+
+    let persona = Persona::query_by_id(id, &db)
+        .to_status()?;
+    
+    if persona.user_id != jwt.custom.user_id && persona.private {
+        return Err(Status::Unauthorized);
+    }
+
+    PersonaJwt(persona.id).encode(&persona_key.key)
+        .to_status()?
+        .to_json()
 }
