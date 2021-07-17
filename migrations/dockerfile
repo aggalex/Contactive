@@ -1,0 +1,15 @@
+FROM rustlang/rust:nightly as migrator
+WORKDIR contactive/
+RUN cargo install diesel_cli --no-default-features --features postgres
+RUN ls -lR
+RUN which diesel
+
+FROM postgres:latest as migration
+WORKDIR contactive/
+COPY . migrations
+COPY ./env .
+COPY ./wait.sh .
+COPY --from=migrator /usr/local/cargo/bin/diesel /usr/local/bin
+RUN rm migrations/env migrations/dockerfile migrations/wait.sh
+RUN ls -l 1>&2
+CMD [ "./wait.sh", "postgresql", "diesel", "migration", "run" ]

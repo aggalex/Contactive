@@ -15,6 +15,7 @@ extern crate jwt_simple;
 extern crate time;
 extern crate sorted_vec;
 extern crate chrono;
+extern crate rocket_cors;
 
 pub mod db;
 pub mod routing;

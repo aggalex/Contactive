@@ -8,8 +8,23 @@ use crate::verification::*;
 
 use super::EmptyResponse;
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RegisterUser {
+    pub username: String,
+    pub password: String,
+    pub email: String,
+}
+
+impl From<&RegisterUser> for NewUser {
+    fn from(r: &RegisterUser) -> Self {
+        let r = r.clone();
+        NewUser::new(r.username, r.email, r.password)
+    }
+}
+
 #[post("/register", format = "application/json", data = "<user>")]
-pub fn register (user: Json<NewUser>, db: State<DBState>) -> EmptyResponse {
+pub fn register (user: Json<RegisterUser>, db: State<DBState>) -> EmptyResponse {
+    let user = NewUser::from(&*user);
 
     match User::query_by_username(&user.username, &db) {
         Ok(_) => return Err(Status::UnprocessableEntity),

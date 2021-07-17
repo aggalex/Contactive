@@ -1,5 +1,7 @@
 use rocket::{Rocket, http::Status};
 use serde::Serialize;
+use rocket::http::Method;
+use rocket_cors::{AllowedOrigins, CorsOptions};
 
 use crate::verification::jwt::LoginHandler;
 
@@ -30,7 +32,17 @@ pub fn start () -> Rocket {
         contacts::personas::get_personas_of_user,
         contacts::personas::get_persona_by_key,
         contacts::personas::get_key_for_persona
-    ])
+    ]).attach(CorsOptions::default()
+        .allowed_origins(AllowedOrigins::all())
+        .allowed_methods(
+            vec![Method::Get, Method::Post, Method::Delete, ]
+                .into_iter()
+                .map(From::from)
+                .collect(),
+        )
+        .allow_credentials(true)
+        .to_cors().unwrap()
+    )
 }
 
 #[derive(Responder)]

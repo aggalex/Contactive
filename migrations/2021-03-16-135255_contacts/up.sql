@@ -1,4 +1,5 @@
 -- Your SQL goes here
+
 CREATE TABLE users (
   id BIGSERIAL PRIMARY KEY,
   username VARCHAR(64) NOT NULL,

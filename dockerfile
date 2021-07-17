@@ -22,14 +22,20 @@ COPY --from=cacher /contactive/target target
 COPY --from=cacher /usr/local/cargo /usr/local/cargo
 RUN cargo build --release --bin contactive
 
-FROM rustlang/rust:nightly as runtime
+FROM postgres:latest as runtime
 
 EXPOSE 8000
 
 WORKDIR /contactive
 COPY --from=builder /contactive/target/release/contactive /usr/local/bin
+COPY --from=planner /contactive/wait.sh /usr/local/bin
+COPY --from=planner /contactive/env .
+
+RUN [ -f /usr/local/bin/contactive ]
 
 ENV ROCKET_ADDRESS=0.0.0.0
 ENV ROCKET_PORT=8000
 
-CMD [ "./usr/local/bin/contactive" ]
+EXPOSE 8000
+
+CMD [ "wait.sh", "postgresql", "/usr/local/bin/contactive" ]
