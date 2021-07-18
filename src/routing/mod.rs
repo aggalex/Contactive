@@ -80,7 +80,7 @@ const SUCCESS: EmptyResponse = Ok(());
 
 trait Verifier: crate::verification::Verifier {
 
-    fn verify_or_respond (&self, cookies: &mut Self::Source) -> Result<Self::Ok, Status> {
+    fn verify_or_respond (&self, cookies: &Self::Source) -> Result<Self::Ok, Status> {
         self.verify (cookies).catch(Status::Unauthorized)
     }
 

@@ -1,15 +1,16 @@
-use rocket::{State, http::Cookies};
+use rocket::{State};
 use rocket_contrib::json::Json;
 use crate::{db::{DBState, QueryById, Register, contact::{Contact, NewContact, UserContactRelation}, user::{IsUser, User}}, verification::jwt::LoginHandler};
 use super::{JsonResponse, StatusCatch, Verifier};
 use crate::routing::ToJson;
+use crate::verification::jwt::Token;
 
 pub mod personas;
 pub mod info;
 
 #[get("/contacts")]
-pub fn get_contacts (db: State<DBState>, jwt_key: State<LoginHandler>, mut cookies: Cookies) -> JsonResponse {
-    let user = (*jwt_key).verify_or_respond (&mut cookies)?;
+pub fn get_contacts (db: State<DBState>, jwt_key: State<LoginHandler>, token: Token) -> JsonResponse {
+    let user = (*jwt_key).verify_or_respond (&token)?;
 
     User::query_by_id (user.custom.user_id, &db)
         .and_then (|user| user.get_contacts(&db)) 
@@ -18,8 +19,8 @@ pub fn get_contacts (db: State<DBState>, jwt_key: State<LoginHandler>, mut cooki
 }
 
 #[post("/contacts", format = "application/json", data = "<contacts>")]
-pub fn add_contacts (db: State<DBState>, jwt_key: State<LoginHandler>, contacts: Json<Vec<NewContact>>, mut cookies: Cookies) -> JsonResponse {
-    let user = (*jwt_key).verify_or_respond (&mut cookies)?;
+pub fn add_contacts (db: State<DBState>, jwt_key: State<LoginHandler>, contacts: Json<Vec<NewContact>>, token: Token) -> JsonResponse {
+    let user = (*jwt_key).verify_or_respond (&token)?;
 
     (&*contacts)
         .into_iter ()

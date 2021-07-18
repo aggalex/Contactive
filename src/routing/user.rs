@@ -1,10 +1,10 @@
-use crate::{db::{DBState, Register, persona::NewPersona, user::{IsUser, NewUser, Password, User}}, derive_password, verification::jwt::{AUTH_COOKIE_NAME, JwtHandler, LoginHandler, jwt_data::JwtData}};
+use crate::{db::{DBState, Register, persona::NewPersona, user::{IsUser, NewUser, Password, User}}, derive_password, verification::jwt::{JwtHandler, LoginHandler, jwt_data::JwtData}};
 use crate::rocket::State;
-use rocket::{http::{Cookie, Cookies, Status}};
+use rocket::http::Status;
 use rocket_contrib::json::Json;
 use serde::{Serialize, Deserialize};
 use super::{Catch, SUCCESS, StatusCatch, ToStatus};
-use crate::verification::*;
+use crate::verification::{*, jwt::Token};
 
 use super::EmptyResponse;
 
@@ -54,7 +54,7 @@ pub struct Login {
 derive_password! (Login);
 
 #[post("/login", format = "application/json", data = "<user>")]
-pub fn login (user: Json<Login>, db: State<DBState>, jwt_key: State<LoginHandler>, mut cookies: Cookies) -> EmptyResponse {
+pub fn login (user: Json<Login>, db: State<DBState>, jwt_key: State<LoginHandler>) -> EmptyResponse {
 
     println! ("\t=> Logging in {}", user.username);
 
@@ -72,24 +72,20 @@ pub fn login (user: Json<Login>, db: State<DBState>, jwt_key: State<LoginHandler
 
     println! ("\t=> Password is correct");
 
-    jwt_key.authorize(&mut cookies, dbuser)
+    let mut out: String = "".to_string();
+    jwt_key.authorize(&mut out, dbuser)
         .catch(Status::InternalServerError)?;
 
     SUCCESS
 }
 
 #[post("/logout")]
-pub fn logout (jwt_key: State<LoginHandler>, mut cookies: Cookies) -> EmptyResponse {
+pub fn logout (jwt_key: State<LoginHandler>, token: Token) -> EmptyResponse {
 
-    let cookie = cookies.get_private(AUTH_COOKIE_NAME)
-        .ok_or(Status::UnprocessableEntity)?;
-
-    let auth = cookie.value ().to_string ();
+    let auth = token.0;
 
     let jwt = jwt_key.extract(&auth)
         .catch(Status::Unauthorized)?;
-
-    cookies.remove_private(Cookie::named (AUTH_COOKIE_NAME));
 
     (&*jwt_key).blacklist(JwtData::new_from_claims (jwt, auth));
 
@@ -97,8 +93,8 @@ pub fn logout (jwt_key: State<LoginHandler>, mut cookies: Cookies) -> EmptyRespo
 }
 
 #[delete("/", format = "application/json", data = "<login>")]
-pub fn delete (login: Json<Login>, jwt_key: State<LoginHandler>, db: State<DBState>, mut cookies: Cookies) -> EmptyResponse {
-    let jwt = super::Verifier::verify_or_respond(&*jwt_key, &mut cookies)?;
+pub fn delete (login: Json<Login>, jwt_key: State<LoginHandler>, db: State<DBState>, token: Token) -> EmptyResponse {
+    let jwt = super::Verifier::verify_or_respond(&*jwt_key, &token)?;
 
     let user = User::query_by_username(&login.username, &**db)
         .to_status()?;

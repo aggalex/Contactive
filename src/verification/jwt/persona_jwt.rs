@@ -39,7 +39,7 @@ impl Verifier for PersonaJwtHandler {
     type Source = String;
     type Destination = (User, DBState);
 
-    fn verify (&self, token: &mut String) -> Result<Self::Ok, Self::Err> {
+    fn verify (&self, token: &String) -> Result<Self::Ok, Self::Err> {
         self.key.verify_token::<PersonaJwt> (token, None)
     }
 

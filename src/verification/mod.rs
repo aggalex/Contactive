@@ -20,7 +20,7 @@ pub trait Verifier: Blacklist {
     type Source;
     type Destination = Self::Source;
 
-    fn verify (&self, source: &mut Self::Source) -> Result<Self::Ok, Self::Err>;
+    fn verify (&self, source: &Self::Source) -> Result<Self::Ok, Self::Err>;
     fn authorize (&self, destination: &mut Self::Destination, data: <Self as Verifier>::Data) -> Result<(), Box<dyn Error>>;
 
 }

@@ -1,14 +1,15 @@
-use rocket::{State, http::{Cookies, Status}, response::Redirect};
+use rocket::{State, http::Status, response::Redirect};
 use rocket_contrib::json::Json;
 use crate::{db::{DBState, QueryById, Register, contact::{Contact, IsContact, NewContact, UserContactRelation}, persona::{NewPersona, Persona}, user::{IsUser, User}}, routing::{JsonResponse}, verification::jwt::{Jwt, JwtHandler, LoginHandler, persona_jwt::{PersonaJwt, PersonaJwtHandler}}};
 use serde::{Deserialize, Serialize};
 use crate::routing::ToJson;
 use super::super::Verifier;
 use crate::routing::StatusCatch;
+use crate::verification::jwt::Token;
 
 #[get("/personas/<user>")]
-pub fn get_personas_of_user (db: State<DBState>, jwt_key: State<LoginHandler>, user: i64, mut cookies: Cookies) -> JsonResponse {
-    let jwt = (*jwt_key).verify_or_respond (&mut cookies)?;
+pub fn get_personas_of_user (db: State<DBState>, jwt_key: State<LoginHandler>, user: i64, token: Token) -> JsonResponse {
+    let jwt = (*jwt_key).verify_or_respond (&token)?;
 
     let user = User::query_by_id(user, &**db)
         .to_status()?;
@@ -23,8 +24,8 @@ pub fn get_personas_of_user (db: State<DBState>, jwt_key: State<LoginHandler>, u
 }
 
 #[get("/personas")]
-pub fn get_personas (jwt_key: State<LoginHandler>, mut cookies: Cookies) -> Result<Redirect, Redirect> {
-    let jwt = (*jwt_key).verify_or_respond (&mut cookies)
+pub fn get_personas (jwt_key: State<LoginHandler>, token: Token) -> Result<Redirect, Redirect> {
+    let jwt = (*jwt_key).verify_or_respond (&token)
         .map_err(|_| Redirect::temporary("/login"))?;
 
     Ok(Redirect::found(format!("/{}/personas", jwt.custom.user_id)))
@@ -45,8 +46,8 @@ impl PostPersona {
 }
 
 #[post("/personas", format = "application/json", data = "<personas>")]
-pub fn add_personas (db: State<DBState>, jwt_key: State<LoginHandler>, personas: Json<Vec<PostPersona>>, mut cookies: Cookies) -> JsonResponse {
-    let jwt = (*jwt_key).verify_or_respond (&mut cookies)?;
+pub fn add_personas (db: State<DBState>, jwt_key: State<LoginHandler>, personas: Json<Vec<PostPersona>>, token: Token) -> JsonResponse {
+    let jwt = (*jwt_key).verify_or_respond (&token)?;
 
     (&*personas).into_iter().map(|persona| {
         persona
@@ -61,8 +62,8 @@ pub fn add_personas (db: State<DBState>, jwt_key: State<LoginHandler>, personas:
 }
 
 #[get("/personas?<key>")]
-pub fn get_persona_by_key (db: State<DBState>, jwt_key: State<LoginHandler>, persona_key: State<PersonaJwtHandler>, key: String, mut cookies: Cookies) -> JsonResponse {
-    let jwt = (*jwt_key).verify_or_respond (&mut cookies)?;
+pub fn get_persona_by_key (db: State<DBState>, jwt_key: State<LoginHandler>, persona_key: State<PersonaJwtHandler>, key: String, token: Token) -> JsonResponse {
+    let jwt = (*jwt_key).verify_or_respond (&token)?;
 
     let persona_id = (*persona_key).extract (&key)
         .to_status()?
@@ -84,8 +85,8 @@ pub fn get_persona_by_key (db: State<DBState>, jwt_key: State<LoginHandler>, per
 }
 
 #[get("/personas/key?<id>")]
-pub fn get_key_for_persona (db: State<DBState>, jwt_key: State<LoginHandler>, persona_key: State<PersonaJwtHandler>, id: i64, mut cookies: Cookies) -> JsonResponse {
-    let jwt = (*jwt_key).verify_or_respond(&mut cookies)?;
+pub fn get_key_for_persona (db: State<DBState>, jwt_key: State<LoginHandler>, persona_key: State<PersonaJwtHandler>, id: i64, token: Token) -> JsonResponse {
+    let jwt = (*jwt_key).verify_or_respond(&token)?;
 
     let persona = Persona::query_by_id(id, &db)
         .to_status()?;

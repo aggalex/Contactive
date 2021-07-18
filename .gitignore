@@ -12,3 +12,5 @@ Cargo.lock
 
 # This is for the environment file
 .env
+env
+**/env
