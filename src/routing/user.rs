@@ -24,8 +24,12 @@ impl From<&RegisterUser> for NewUser {
 }
 
 #[post("/register", format = "application/json", data = "<user>")]
-pub fn register (user: Json<RegisterUser>, db: State<DBState>) -> EmptyResponse {
+pub fn register (user: Json<RegisterUser>, db: State<DBState>, jwt_key: State<LoginHandler>) -> JsonResponse {
     let user = NewUser::from(&*user);
+    let login_data = Login {
+        username: user.username.clone(),
+        password: user.password.clone()
+    };
 
     match User::query_by_username(&user.username, &db) {
         Ok(_) => return Err(Status::UnprocessableEntity),
@@ -43,7 +47,7 @@ pub fn register (user: Json<RegisterUser>, db: State<DBState>) -> EmptyResponse 
         .and_then(|user| NewPersona::new_default (user.id).register (&db))
         .to_status ()?;
 
-    SUCCESS
+    login(Json(login_data), db, jwt_key)
 }
 
 #[derive(Clone, Serialize, Deserialize)]
