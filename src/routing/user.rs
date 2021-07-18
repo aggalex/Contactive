@@ -92,6 +92,8 @@ pub fn logout (jwt_key: State<LoginHandler>, token: Token) -> EmptyResponse {
     let jwt = jwt_key.extract(&auth)
         .catch(Status::Unauthorized)?;
 
+    println!("\t=> Logging out {}", jwt.custom.username);
+
     (&*jwt_key).blacklist(JwtData::new_from_claims (jwt, auth));
 
     SUCCESS
