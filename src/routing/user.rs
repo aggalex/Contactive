@@ -7,6 +7,7 @@ use super::{Catch, SUCCESS, StatusCatch, ToStatus};
 use crate::verification::{*, jwt::Token};
 
 use super::EmptyResponse;
+use crate::routing::{JsonResponse, ToJson};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RegisterUser {
@@ -54,7 +55,7 @@ pub struct Login {
 derive_password! (Login);
 
 #[post("/login", format = "application/json", data = "<user>")]
-pub fn login (user: Json<Login>, db: State<DBState>, jwt_key: State<LoginHandler>) -> EmptyResponse {
+pub fn login (user: Json<Login>, db: State<DBState>, jwt_key: State<LoginHandler>) -> JsonResponse {
 
     println! ("\t=> Logging in {}", user.username);
 
@@ -76,7 +77,7 @@ pub fn login (user: Json<Login>, db: State<DBState>, jwt_key: State<LoginHandler
     jwt_key.authorize(&mut out, dbuser)
         .catch(Status::InternalServerError)?;
 
-    SUCCESS
+    out.to_json()
 }
 
 #[post("/logout")]
