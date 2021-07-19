@@ -10,6 +10,7 @@ pub trait Blacklist: Send + Sync {
     fn is_blacklisted (&self, token: &String) -> bool;
 
 }
+
 pub trait Verifier: Blacklist {
 
     type Data;

@@ -8,6 +8,7 @@ use crate::verification::{*, jwt::Token};
 
 use super::EmptyResponse;
 use crate::routing::{JsonResponse, ToJson};
+use crate::db::QueryById;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RegisterUser {
@@ -124,4 +125,29 @@ pub fn delete (login: Json<Login>, jwt_key: State<LoginHandler>, db: State<DBSta
         .to_status()?;
 
     Ok(())
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct Me {
+    username: String,
+    email: String,
+    id: i64,
+}
+
+impl From<User> for Me {
+    fn from(u: User) -> Self {
+        Me {
+            username: u.username,
+            email: u.email,
+            id: u.id
+        }
+    }
+}
+
+#[get("/me")]
+pub fn me (jwt_key: State<LoginHandler>, db: State<DBState>, token: Token) -> JsonResponse {
+    let jwt = super::Verifier::verify_or_respond(&*jwt_key, &token)?;
+    
+    Me::from(User::query_by_id(jwt.custom.user_id, &**db)
+        .catch(Status::NotFound)?).to_json()
 }
