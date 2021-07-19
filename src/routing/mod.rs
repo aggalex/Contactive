@@ -23,6 +23,7 @@ pub fn start () -> Rocket {
         user::login,
         user::logout,
         user::delete,
+        user::me,
         contacts::get_contacts,
         contacts::add_contacts,
         contacts::info::get_info,
