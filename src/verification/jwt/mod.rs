@@ -153,13 +153,14 @@ impl Verifier for LoginHandler {
     type Destination = String;
 
     fn verify (&self, token: &Token) -> Result<JWTClaims<LoginJwt>, jwt_simple::Error> {
+        println!("\t=> Verifying for token: {}", token.0);
         self.extract(&token.0)
     }
 
     fn authorize (&self, key: &mut String, user: User) -> Result<(), Box<dyn Error>> {
         *key = LoginJwt::new_from_user (user).encode (&self.key)?;
 
-        println! ("\t=> {}", (key));
+        println! ("\t=> {}", key);
         
         Ok(())
     }
