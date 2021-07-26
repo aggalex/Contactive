@@ -67,7 +67,7 @@ impl Info {
             .collect::<HashSet<String>> ();
 
         let info = keys.into_iter ()
-            .map (|key| (key, (&fragments).into_iter ()
+            .map (|key| (key.clone(), (&fragments).into_iter ()
                 .filter (|fragment| fragment.key == key)
                 .map (|fragment| fragment.value.clone())
                 .collect::<Vec<String>> ())
