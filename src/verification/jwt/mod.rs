@@ -138,7 +138,14 @@ impl<'a, 'r> FromRequest<'a, 'r> for Token {
 
     fn from_request(request: &'a rocket::Request<'r>) -> rocket::request::Outcome<Self, Self::Error> {
         match request.headers().get(AUTH_HEADER_NAME).next() {
-            Some(auth) => rocket::request::Outcome::Success(Token(auth.to_string())),
+            Some(auth) => rocket::request::Outcome::Success(Token({
+                let s = auth.to_string();
+                if s.starts_with("Basic ") {
+                    s[6..].to_string()
+                } else {
+                    s
+                }
+            })),
             None => rocket::request::Outcome::Failure((Status::Unauthorized, jwt_simple::Error::msg("Unauthorized"),))
         }
     }
