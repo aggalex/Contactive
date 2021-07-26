@@ -21,7 +21,9 @@ pub trait Verifier: Blacklist {
     type Source;
     type Destination = Self::Source;
 
+    fn reauthorize(&self, source: &Self::Source, destination: &mut Self::Destination) -> Result<(), Box<dyn Error>>;
     fn verify (&self, source: &Self::Source) -> Result<Self::Ok, Self::Err>;
-    fn authorize (&self, destination: &mut Self::Destination, data: <Self as Verifier>::Data) -> Result<(), Box<dyn Error>>;
+    fn authorize<G> (&self, destination: &mut Self::Destination, data: G) -> Result<(), Box<dyn Error>>
+        where <Self as Verifier>::Data: From<G>;
 
 }

@@ -10,6 +10,8 @@ use self::blacklist::ThreadBlacklist;
 use self::jwt_data::JwtData;
 
 use super::{Blacklist, Verifier};
+use jwt_simple::prelude::UnixTimeStamp;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub mod jwt_data;
 pub mod blacklist;
@@ -30,13 +32,15 @@ impl LoginJwt {
         }
     }
 
-    pub fn new_from_user (user: User) -> Self {
+}
+
+impl From<User> for LoginJwt {
+    fn from(u: User) -> Self {
         Self {
-            username: user.username,
-            user_id: user.id
+            username: u.username,
+            user_id: u.id
         }
     }
-
 }
 
 pub trait Jwt: Clone + Serialize + DeserializeOwned + PartialEq {
@@ -142,7 +146,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for Token {
 
 impl Verifier for LoginHandler {
 
-    type Data = user::User;
+    type Data = LoginJwt;
 
     type Ok = JWTClaims<LoginJwt>;
 
@@ -152,13 +156,36 @@ impl Verifier for LoginHandler {
 
     type Destination = String;
 
-    fn verify (&self, token: &Token) -> Result<JWTClaims<LoginJwt>, jwt_simple::Error> {
-        println!("\t=> Verifying for token: {}", token.0);
-        self.extract(&token.0)
+    fn reauthorize (&self, token: &Token, out: &mut String) -> Result<(), Box<dyn Error>> {
+        let claims = self.extract(&token.0)?;
+        self.authorize(out, claims.custom)
     }
 
-    fn authorize (&self, key: &mut String, user: User) -> Result<(), Box<dyn Error>> {
-        *key = LoginJwt::new_from_user (user).encode (&self.key)?;
+    fn verify (&self, token: &Token) -> Result<JWTClaims<LoginJwt>, jwt_simple::Error> {
+        println!("\t=> Verifying for token: {}", token.0);
+        self.extract(&token.0).and_then(|claims| {
+            let now: UnixTimeStamp = Duration::from_secs(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect ("Time went backwards")
+                    .as_secs()
+            );
+            let expiration = Duration::from_secs(match claims.expires_at {
+                Some(claims) => claims,
+                None => return Err(jwt_simple::Error::msg("Invalid JWT"))
+            }.as_secs() - 10 * 60);
+            if now > expiration {
+                Err(jwt_simple::Error::msg("token should be renewed"))
+            } else {
+                Ok(claims)
+            }
+        })
+    }
+
+    fn authorize<G> (&self, key: &mut String, userdata: G) -> Result<(), Box<dyn Error>>
+        where <Self as Verifier>::Data: From<G>
+    {
+        *key = LoginJwt::from (userdata).encode (&self.key)?;
 
         println! ("\t=> {}", key);
         

@@ -32,8 +32,8 @@ CREATE TABLE contacts (
 );
 
 CREATE TABLE users_contacts_join (
-    user_id BIGINT NOT NULL UNIQUE,
-    contact_id BIGINT NOT NULL UNIQUE,
+    user_id BIGINT NOT NULL,
+    contact_id BIGINT NOT NULL,
 
     PRIMARY KEY (user_id, contact_id),
 

@@ -151,3 +151,8 @@ pub fn me (jwt_key: State<LoginHandler>, db: State<DBState>, token: Token) -> Js
     Me::from(User::query_by_id(jwt.custom.user_id, &**db)
         .catch(Status::NotFound)?).to_json()
 }
+
+#[post("/renew")]
+pub fn renew (jwt_key: State<LoginHandler>, db: State<DBState>, token: Token) -> JsonResponse {
+
+}

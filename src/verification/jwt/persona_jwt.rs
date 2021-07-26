@@ -4,7 +4,7 @@ use crate::{db::persona::Persona, verification::{Blacklist, Verifier}};
 
 use super::{Jwt, JwtHandler};
 use crate::db::contact::{Contact, UserContactRelation};
-use crate::db::{DBState, Register};
+use crate::db::{DBState, Register, QueryById};
 use crate::db::user::User;
 use std::error::Error;
 
@@ -39,12 +39,21 @@ impl Verifier for PersonaJwtHandler {
     type Source = String;
     type Destination = (User, DBState);
 
+    fn reauthorize(&self, source: &String, destination: &mut (User, DBState)) -> Result<(), Box<dyn Error>> {
+        let (u, db) = destination;
+        let claims = self.verify(source)?;
+        let persona = Persona::query_by_id(claims.custom.0, db)?;
+        self.authorize(destination, persona)
+    }
+
     fn verify (&self, token: &String) -> Result<Self::Ok, Self::Err> {
         self.key.verify_token::<PersonaJwt> (token, None)
     }
 
-    fn authorize (&self, (user, db): &mut (User, DBState), item: Persona) -> Result<(), Box<dyn Error>> {
-        let contact = Contact::of_persona (item.id, db)?;
+    fn authorize<G> (&self, (user, db): &mut (User, DBState), item: G) -> Result<(), Box<dyn Error>>
+        where Persona: From<G>
+    {
+        let contact = Contact::of_persona (Persona::from(item).id, db)?;
 
         UserContactRelation (
             user.id,
