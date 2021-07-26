@@ -129,7 +129,7 @@ impl<'a> Blacklist for LoginHandler {
     }
 }
 
-pub const AUTH_HEADER_NAME: &str = "authentication";
+pub const AUTH_HEADER_NAME: &str = "Authorization";
 
 pub struct Token (pub String);
 
@@ -164,16 +164,15 @@ impl Verifier for LoginHandler {
     fn verify (&self, token: &Token) -> Result<JWTClaims<LoginJwt>, jwt_simple::Error> {
         println!("\t=> Verifying for token: {}", token.0);
         self.extract(&token.0).and_then(|claims| {
-            let now: UnixTimeStamp = Duration::from_secs(
-                SystemTime::now()
+            let now = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .expect ("Time went backwards")
-                    .as_secs()
-            );
-            let expiration = Duration::from_secs(match claims.expires_at {
+                    .as_secs();
+            let expiration = match claims.expires_at {
                 Some(claims) => claims,
                 None => return Err(jwt_simple::Error::msg("Invalid JWT"))
-            }.as_secs() - 10 * 60);
+            }.as_secs() - 10 * 60;
+            println!("\t=> now - expiration = {}", now - expiration);
             if now > expiration {
                 Err(jwt_simple::Error::msg("token should be renewed"))
             } else {

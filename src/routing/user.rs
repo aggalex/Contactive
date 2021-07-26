@@ -146,6 +146,7 @@ impl From<User> for Me {
 
 #[get("/me")]
 pub fn me (jwt_key: State<LoginHandler>, db: State<DBState>, token: Token) -> JsonResponse {
+    println!("Me! token = {}", token.0);
     let jwt = super::Verifier::verify_or_respond(&*jwt_key, &token)?;
     
     Me::from(User::query_by_id(jwt.custom.user_id, &**db)
@@ -154,5 +155,7 @@ pub fn me (jwt_key: State<LoginHandler>, db: State<DBState>, token: Token) -> Js
 
 #[post("/renew")]
 pub fn renew (jwt_key: State<LoginHandler>, db: State<DBState>, token: Token) -> JsonResponse {
-
+    let mut out: String = "".to_string();
+    jwt_key.reauthorize(&token, &mut out).map_err(|_| Status::Unauthorized)?;
+    out.to_json()
 }
