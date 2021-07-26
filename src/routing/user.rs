@@ -154,5 +154,7 @@ pub fn me (jwt_key: State<LoginHandler>, db: State<DBState>, token: Token) -> Js
 
 #[post("/renew")]
 pub fn renew (jwt_key: State<LoginHandler>, db: State<DBState>, token: Token) -> JsonResponse {
-
+    let mut out: String = "".to_string();
+    jwt_key.reauthorize(&token, &mut out).map_err(|_| Status::Unauthorized)?;
+    out.to_json()
 }
