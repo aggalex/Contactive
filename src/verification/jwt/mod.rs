@@ -129,7 +129,7 @@ impl<'a> Blacklist for LoginHandler {
     }
 }
 
-pub const AUTH_HEADER_NAME: &str = "authentication";
+pub const AUTH_HEADER_NAME: &str = "Authentication";
 
 pub struct Token (pub String);
 
