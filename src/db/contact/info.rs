@@ -4,11 +4,13 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, result::{DatabaseErrorKin
 use serde::{Deserialize, Serialize, ser::SerializeMap};
 use serde::Serializer;
 
-use crate::{db::{DefaultConnection, Register, schema::info}, impl_register_for};
+use crate::{db::{DefaultConnection, Register, schema::info}, impl_register_for, update};
 
 use super::{ContactDescriptor, IsContact};
+use crate::db::{Update, Delete};
+use diesel::result::Error;
 
-#[derive(Queryable, Insertable, Deserialize, Clone, Debug)]
+#[derive(Queryable, Insertable, AsChangeset, Deserialize, Clone, Debug)]
 #[table_name="info"]
 pub struct InfoFragment {
     pub key: String,
@@ -26,6 +28,21 @@ impl InfoFragment {
         }
     }
 
+    pub fn delete(self, db: &DefaultConnection) -> Result<(), diesel::result::Error> {
+        <InfoFragment as Delete>::delete(db, self)?;
+        Ok(())
+    }
+
+}
+
+impl Delete for InfoFragment {
+    type Table = info::table;
+    const TABLE: Self::Table = info::table;
+    type PrimaryKey = InfoFragment;
+
+    fn delete(db: &DefaultConnection, id: Self::PrimaryKey) -> Result<usize, Error> {
+        diesel::delete(info::table.find((id.key, id.value, id.contact_id))).execute(db)
+    }
 }
 
 impl Serialize for InfoFragment {

@@ -4,6 +4,9 @@ use serde::{Serialize, Deserialize};
 use bcrypt::{BcryptError, DEFAULT_COST, hash, verify};
 use sha2::{Digest, Sha512};
 use crate::{diesel::ExpressionMethods, impl_query_by_id, impl_register_for};
+use crate::db::{Update, Register};
+use diesel::result::Error;
+use crate::{update, delete};
 
 #[derive(Clone, Queryable, Debug)]
 pub struct User {
@@ -35,6 +38,18 @@ pub struct NewUser {
     pub password: String,
     pub level: i32
 }
+
+#[derive(Clone, AsChangeset, Serialize, Deserialize, Debug)]
+#[table_name="users"]
+pub struct UpdateUser {
+    pub username: Option<String>,
+    pub email: Option<String>,
+    pub password: Option<String>,
+    pub level: Option<i32>
+}
+
+update! (UpdateUser => NewUser, i64);
+delete! (User => NewUser, i64);
 
 impl NewUser {
     pub fn new(username: String, email: String, password: String) -> Self { Self { username, email, password, level: 0 } }

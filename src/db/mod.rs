@@ -1,8 +1,12 @@
-use diesel::{Connection, Expression, Insertable, QuerySource, RunQueryDsl, Table, insertable::CanInsertInSingleQuery, pg::PgConnection, query_builder::QueryFragment, result::Error, types::HasSqlType};
+use diesel::{Connection, Expression, Insertable, QuerySource, RunQueryDsl, Table, insertable::CanInsertInSingleQuery, pg::PgConnection, query_builder::QueryFragment, result::Error, types::HasSqlType, Identifiable};
 use rocket::http::Status;
 use std::env;
+use crate::diesel::QueryDsl;
 
 use crate::routing::ToStatus;
+use diesel::query_builder::{AsChangeset, AsQuery};
+use diesel::query_dsl::filter_dsl::FilterDsl;
+use diesel::associations::HasTable;
 
 pub mod schema;
 pub mod user;
@@ -76,6 +80,64 @@ pub trait Register: Insertable<Self::Table> + Sized
             .get_result::<Self::Queryable>(db)
     }
     
+}
+
+pub trait Update: AsChangeset + Sized {
+
+    type Table: Table;
+    const TABLE: Self::Table;
+
+    type Queryable;
+
+    type PrimaryKey;
+
+    fn update (&self, db: &DefaultConnection, ids: Self::PrimaryKey) -> Result<Self::Queryable, diesel::result::Error>;
+}
+
+pub trait Delete {
+    type Table: Table;
+    const TABLE: Self::Table;
+
+    type PrimaryKey;
+
+    fn delete (db: &DefaultConnection, id: Self::PrimaryKey) -> Result<usize, diesel::result::Error>;
+}
+
+#[macro_export]
+macro_rules! delete {
+    ($t:ty => $reg:ty, $key:path) => {
+        impl crate::db::Delete for $t {
+            type Table = <$reg as crate::db::Register>::Table;
+            const TABLE: Self::Table = <$reg as crate::db::Register>::TABLE;
+
+            type PrimaryKey = $key;
+
+            fn delete (db: &DefaultConnection, id: Self::PrimaryKey) -> Result<usize, diesel::result::Error> {
+                diesel::delete(Self::TABLE.find(id)).execute(db)
+            }
+
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! update {
+    ($t:ty => $reg:ty, $key:ty) => {
+        impl crate::db::Update for $t {
+            type Table = <$reg as crate::db::Register>::Table;
+            const TABLE: Self::Table = <$reg as crate::db::Register>::TABLE;
+            type Queryable = <$reg as crate::db::Register>::Queryable;
+
+            // type PrimaryKey = <Self::Table as diesel::query_source::Table>::PrimaryKey;
+            type PrimaryKey = $key;
+
+            fn update(&self, db: &DefaultConnection, id: Self::PrimaryKey) -> Result<Self::Queryable, diesel::result::Error> {
+                diesel::update(Self::TABLE.find(id))
+                    .set(self)
+                    .get_result(db)
+            }
+        }
+    }
 }
 
 pub trait QueryById: Sized {

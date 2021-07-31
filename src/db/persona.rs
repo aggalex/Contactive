@@ -3,6 +3,7 @@ use crate::{diesel::ExpressionMethods, impl_query_by_id, impl_register_for};
 use serde::{Deserialize, Serialize};
 use super::{DefaultConnection, contact::Contact, user::User};
 use super::schema::*;
+use crate::{update, delete};
 
 #[derive(Clone, Queryable, Serialize, Deserialize, Debug)]
 pub struct Persona {
@@ -21,6 +22,17 @@ pub struct NewPersona {
     pub private: bool,
     pub user_id: i64
 }
+
+#[derive(Clone, AsChangeset, Serialize, Deserialize, Debug)]
+#[table_name="personas"]
+pub struct UpdatePersona {
+    pub name: Option<String>,
+    pub private: Option<bool>,
+    pub user_id: Option<i64>
+}
+
+update!(UpdatePersona => NewPersona, i64);
+delete!(Persona => NewPersona, i64);
 
 trait IsPersona {
 

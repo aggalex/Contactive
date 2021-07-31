@@ -2,8 +2,10 @@ use rocket::{State};
 use rocket_contrib::json::Json;
 use crate::{db::{DBState, QueryById, Register, contact::{Contact, NewContact, UserContactRelation}, user::{IsUser, User}}, verification::jwt::LoginHandler};
 use super::{JsonResponse, StatusCatch, Verifier};
-use crate::routing::ToJson;
+use crate::routing::{ToJson, EmptyResponse};
 use crate::verification::jwt::Token;
+use crate::db::{Delete, Update};
+use crate::db::contact::UpdateContact;
 
 pub mod personas;
 pub mod info;
@@ -36,4 +38,18 @@ pub fn add_contacts (db: State<DBState>, jwt_key: State<LoginHandler>, contacts:
         .collect::<Result<Vec<Contact>, diesel::result::Error>> ()
         .to_status()?
         .to_json ()
+}
+
+#[delete("/contacts/<id>")]
+pub fn delete_contact (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64, token: Token) -> EmptyResponse {
+    
+    Contact::delete(&**db, id).to_status()?;
+    
+    Ok(())
+}
+
+#[patch("/contacts/<id>", format = "application/json", data = "<contact>")]
+pub fn edit_contact (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64, contact: Json<UpdateContact>, token: Token) -> JsonResponse {
+
+    contact.update(&**db, id).to_status()?.to_json()
 }

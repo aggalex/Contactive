@@ -4,8 +4,8 @@ use crate::impl_register_for;
 use crate::diesel::{RunQueryDsl, ExpressionMethods};
 use self::info::Info;
 
-use super::{ConjuctionTable, DefaultConnection, QueryById, schema::{contacts, users_contacts_join}, user::{NewUser, User}};
-use crate::impl_query_by_id;
+use super::{ConjuctionTable, DefaultConnection, QueryById, schema::{contacts, users_contacts_join}, user::{NewUser, User}, Register, Update};
+use crate::{impl_query_by_id, update, delete};
 
 pub mod info;
 
@@ -38,6 +38,17 @@ impl NewContact {
     }
 
 }
+
+#[derive(AsChangeset, Serialize, Deserialize, Clone, Debug)]
+#[table_name="contacts"]
+pub struct UpdateContact {
+    pub name: Option<String>,
+    pub icon: Option<Option<Vec<u8>>>,
+    pub persona: Option<Option<i64>>
+}
+
+update!(UpdateContact => NewContact, i64);
+delete!(Contact => NewContact, i64);
 
 #[derive(Queryable, Clone, Serialize, Deserialize, Debug)]
 pub struct Contact {

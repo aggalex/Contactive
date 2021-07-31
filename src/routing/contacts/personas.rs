@@ -2,10 +2,12 @@ use rocket::{State, http::Status, response::Redirect};
 use rocket_contrib::json::Json;
 use crate::{db::{DBState, QueryById, Register, contact::{Contact, IsContact, NewContact, UserContactRelation}, persona::{NewPersona, Persona}, user::{IsUser, User}}, routing::{JsonResponse}, verification::jwt::{Jwt, JwtHandler, LoginHandler, persona_jwt::{PersonaJwt, PersonaJwtHandler}}};
 use serde::{Deserialize, Serialize};
-use crate::routing::{ToJson, Catch};
+use crate::routing::{ToJson, Catch, EmptyResponse};
 use super::super::Verifier;
 use crate::routing::StatusCatch;
 use crate::verification::jwt::Token;
+use crate::db::{Delete, Update};
+use crate::db::persona::UpdatePersona;
 
 #[get("/personas/<user>")]
 pub fn get_personas_of_user (db: State<DBState>, jwt_key: State<LoginHandler>, user: i64, token: Token) -> JsonResponse {
@@ -101,5 +103,22 @@ pub fn get_key_for_persona (db: State<DBState>, jwt_key: State<LoginHandler>, pe
 
     PersonaJwt(persona.id).encode(&persona_key.key)
         .to_status()?
+        .to_json()
+}
+
+#[delete("/personas/<id>")]
+pub fn delete_persona (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64, token: Token) -> EmptyResponse {
+    let jwt = (*jwt_key).verify_or_respond(&token)?;
+
+    Persona::delete(&**db, id).to_status()?;
+
+    Ok(())
+}
+
+#[patch("/personas/<id>", format = "application/json", data = "<persona>")]
+pub fn patch_persona (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64, persona: Json<UpdatePersona>, token: Token) -> JsonResponse {
+    let jwt = (*jwt_key).verify_or_respond(&token)?;
+
+    persona.update(&**db, id).to_status()?
         .to_json()
 }

@@ -36,7 +36,7 @@ pub fn start () -> Rocket {
     ]).attach(CorsOptions::default()
         .allowed_origins(AllowedOrigins::all())
         .allowed_methods(
-            vec![Method::Get, Method::Post, Method::Delete, ]
+            vec![Method::Get, Method::Post, Method::Delete, Method::Patch]
                 .into_iter()
                 .map(From::from)
                 .collect(),
