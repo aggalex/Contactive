@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, result::{DatabaseErrorKind::UniqueViolation, Error::DatabaseError}};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, result::{DatabaseErrorKind::UniqueViolation, Error::DatabaseError}, BoolExpressionMethods};
 use serde::{Deserialize, Serialize, ser::SerializeMap};
 use serde::Serializer;
 
@@ -9,6 +9,8 @@ use crate::{db::{DefaultConnection, Register, schema::info}, impl_register_for, 
 use super::{ContactDescriptor, IsContact};
 use crate::db::{Update, Delete};
 use diesel::result::Error;
+use crate::db::schema::info::dsl::key;
+use crate::db::schema::info::columns::contact_id;
 
 #[derive(Queryable, Insertable, AsChangeset, Deserialize, Clone, Debug)]
 #[table_name="info"]
@@ -20,11 +22,11 @@ pub struct InfoFragment {
 
 impl InfoFragment {
 
-    pub fn new (key: String, value: String, contact_id: i64) -> InfoFragment {
+    pub fn new (other_key: String, value: String, contact: i64) -> InfoFragment {
         InfoFragment {
-            key,
+            key: other_key,
             value,
-            contact_id
+            contact_id: contact
         }
     }
 
@@ -33,6 +35,18 @@ impl InfoFragment {
         Ok(())
     }
 
+}
+
+pub struct InfoSection {
+    pub name: String,
+    pub contact: i64
+}
+
+impl InfoSection {
+    pub fn delete(self, db: &DefaultConnection) -> Result<usize, diesel::result::Error> {
+        diesel::delete(info::table.filter(key.eq(self.name).and(contact_id.eq(self.contact))))
+            .execute(db)
+    }
 }
 
 impl Delete for InfoFragment {
@@ -84,8 +98,8 @@ impl Info {
             .collect::<HashSet<String>> ();
 
         let info = keys.into_iter ()
-            .map (|key| (key.clone(), (&fragments).into_iter ()
-                .filter (|fragment| fragment.key == key)
+            .map (|k| (k.clone(), (&fragments).into_iter ()
+                .filter (|fragment| fragment.key == k)
                 .map (|fragment| fragment.value.clone())
                 .collect::<Vec<String>> ())
             )
@@ -98,9 +112,9 @@ impl Info {
     }
 
     pub fn register(&self, db: &DefaultConnection) -> Result<&Self, diesel::result::Error> {
-        for (key, values) in &self.info {
+        for (k, values) in &self.info {
             for value in values {
-                let fragment = InfoFragment::new(key.clone (), value.clone(), self.contact_id);
+                let fragment = InfoFragment::new(k.clone (), value.clone(), self.contact_id);
                 let result = fragment
                     .register (db);
 
@@ -120,7 +134,7 @@ impl<S> std::ops::Index<S> for Info
 {
     type Output = Vec<String>;
 
-    fn index(&self, key: S) -> &Self::Output {
-        &self.info[&key.to_string ()]
+    fn index(&self, k: S) -> &Self::Output {
+        &self.info[&k.to_string ()]
     }
 }

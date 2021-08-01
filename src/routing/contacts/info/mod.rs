@@ -4,11 +4,12 @@ use rocket_contrib::json::Json;
 use crate::{db::{ConjuctionTable, DBState, QueryById, contact::{Contact, IsContact, UserContactRelation, info::{BareInfo, Info}}}, routing::{Catch, EmptyResponse, JsonResponse, SUCCESS, ToJson, Verifier}, verification::jwt::LoginHandler};
 use crate::verification::jwt::Token;
 use crate::routing::StatusCatch;
-use crate::db::contact::info::InfoFragment;
+use crate::db::contact::info::{InfoFragment, InfoSection};
 use std::collections::HashMap;
 
 #[get("/info/<contact>")]
-pub fn get_info (db: State<DBState>, jwt_key: State<LoginHandler>, contact: i64, token: Token) -> JsonResponse {
+pub fn get_info (db: State<DBState>, jwt_key: State<LoginHandler>, contact: i64,
+                 token: Token) -> JsonResponse {
     let user = (*jwt_key).verify_or_respond (&token)?;
 
     let contact = Contact::query_by_id(contact, &**db)
@@ -44,21 +45,24 @@ fn _post_info (db: State<DBState>, jwt_key: State<LoginHandler>, info: Info, tok
 }
 
 #[post("/info", format = "application/json", data = "<info>")]
-pub fn post_info_by_data (db: State<DBState>, jwt_key: State<LoginHandler>, info: Json<Info>, token: Token) -> EmptyResponse {
+pub fn post_info_by_data (db: State<DBState>, jwt_key: State<LoginHandler>, info: Json<Info>,
+                          token: Token) -> EmptyResponse {
     _post_info (db, jwt_key, info.clone(), token)
 }
 
 #[post("/info/<contact>", format = "application/json", data = "<info>")]
-pub fn post_info_by_url (db: State<DBState>, jwt_key: State<LoginHandler>, contact: i64, info: Json<BareInfo>, token: Token) -> EmptyResponse {
+pub fn post_info_by_url (db: State<DBState>, jwt_key: State<LoginHandler>,
+                         contact: i64, info: Json<BareInfo>, token: Token) -> EmptyResponse {
     _post_info (db, jwt_key, Info {
         contact_id: contact,
         info: info.clone ()
     }, token)
 }
 
-//TODO: optimize
 #[delete("/info/<contact>", format = "application/json", data = "<infosections>")]
-pub fn delete_info(db: State<DBState>, jwt_key: State<LoginHandler>, contact: i64, infosections: Json<HashMap<String, Option<String>>>, token: Token) -> EmptyResponse {
+pub fn delete_info(db: State<DBState>, jwt_key: State<LoginHandler>, contact: i64,
+                   infosections: Json<HashMap<String, Option<Vec<String>>>>,
+                   token: Token) -> EmptyResponse {
     let user = (*jwt_key).verify_or_respond (&token)?;
 
     let contact = Contact::query_by_id(contact, &**db)
@@ -68,19 +72,29 @@ pub fn delete_info(db: State<DBState>, jwt_key: State<LoginHandler>, contact: i6
         .get_both(&**db)
         .catch(Status::Unauthorized)?;
 
-    let info = contact
-        .get_all_info (&**db)
+    (&*infosections).into_iter()
+        .filter_map(|(k, values)| if let Some(v) = values {
+            Some(Ok(v.into_iter()
+                .map(|v| (k.clone(), v.clone()))
+                .collect::<Vec<(String, String)>>()))
+        } else {
+            InfoSection {
+                name: k.clone(),
+                contact: contact.id
+            }.delete(&**db).map_err(|e| Err(e)).err()
+        })
+        .collect::<Result<Vec<Vec<(String, String)>>, diesel::result::Error>>()
+        .to_status()?
+        .into_iter()
+        .flatten()
+        .map(|(key, value)|
+            InfoFragment {
+                key,
+                value,
+                contact_id: contact.id
+            }.delete(&**db))
+        .collect::<Result<Vec<()>, diesel::result::Error>>()
         .to_status()?;
 
-    info.info.into_iter()
-        .filter(|(name, _)| infosections.get(name).is_some())
-        .map(|(key, values)| values.into_iter()
-            .filter(|v| if let Some(val) = &infosections[&key] { val == v } else { true })
-            .map(|v| InfoFragment {
-                key: key.clone(),
-                value: v.clone(),
-                contact_id: contact.id
-            }.delete(&**db).to_status())
-            .collect::<Result<_, Status>>())
-        .collect::<Result<_, Status>>()
+    SUCCESS
 }
