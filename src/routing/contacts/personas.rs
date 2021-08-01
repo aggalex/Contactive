@@ -116,7 +116,7 @@ pub fn delete_persona (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64
 }
 
 #[patch("/personas/<id>", format = "application/json", data = "<persona>")]
-pub fn patch_persona (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64, persona: Json<UpdatePersona>, token: Token) -> JsonResponse {
+pub fn edit_persona (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64, persona: Json<UpdatePersona>, token: Token) -> JsonResponse {
     let jwt = (*jwt_key).verify_or_respond(&token)?;
 
     persona.update(&**db, id).to_status()?

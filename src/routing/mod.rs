@@ -26,13 +26,18 @@ pub fn start () -> Rocket {
         user::me,
         contacts::get_contacts,
         contacts::add_contacts,
+        contacts::delete_contact,
+        contacts::edit_contact,
         contacts::info::get_info,
         contacts::info::post_info_by_data,
         contacts::info::post_info_by_url,
+        contacts::info::delete_info,
         contacts::personas::get_personas,
         contacts::personas::get_personas_of_user,
         contacts::personas::get_persona_by_key,
-        contacts::personas::get_key_for_persona
+        contacts::personas::get_key_for_persona,
+        contacts::personas::delete_persona,
+        contacts::personas::edit_persona
     ]).attach(CorsOptions::default()
         .allowed_origins(AllowedOrigins::all())
         .allowed_methods(
