@@ -42,7 +42,8 @@ pub fn add_contacts (db: State<DBState>, jwt_key: State<LoginHandler>, contacts:
 
 #[delete("/contacts/<id>")]
 pub fn delete_contact (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64, token: Token) -> EmptyResponse {
-    
+    let user = (*jwt_key).verify_or_respond (&token)?;
+
     Contact::delete(&**db, id).to_status()?;
     
     Ok(())
@@ -50,6 +51,7 @@ pub fn delete_contact (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64
 
 #[patch("/contacts/<id>", format = "application/json", data = "<contact>")]
 pub fn edit_contact (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64, contact: Json<UpdateContact>, token: Token) -> JsonResponse {
+    let user = (*jwt_key).verify_or_respond (&token)?;
 
     contact.update(&**db, id).to_status()?.to_json()
 }

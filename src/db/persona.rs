@@ -59,7 +59,7 @@ trait IsPersona {
 impl NewPersona {
 
     pub fn new(name: String, private: bool, user_id: i64) -> Self {
-        Self { name, private, user_id } 
+        Self { name, private, user_id }
     }
 
     pub fn new_default(user_id: i64) -> Self {

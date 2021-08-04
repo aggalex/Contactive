@@ -3,7 +3,7 @@ table! {
         id -> Int8,
         name -> Varchar,
         icon -> Nullable<Bytea>,
-        persona -> Nullable<Int8>,
+        visibility -> Int2,
     }
 }
 
@@ -18,7 +18,6 @@ table! {
 table! {
     personas (id) {
         id -> Int8,
-        name -> Varchar,
         private -> Bool,
         user_id -> Int8,
     }

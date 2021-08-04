@@ -9,6 +9,9 @@ use crate::verification::jwt::Token;
 use crate::db::{Delete, Update};
 use crate::db::persona::UpdatePersona;
 
+// TODO: DELETE THIS FILE!
+// TODO: Move the jwt to "contacts"
+
 #[get("/personas/<user>")]
 pub fn get_personas_of_user (db: State<DBState>, jwt_key: State<LoginHandler>, user: i64, token: Token) -> JsonResponse {
     let jwt = (*jwt_key).verify_or_respond (&token)?;
@@ -48,14 +51,17 @@ impl PostPersona {
 }
 
 #[post("/personas", format = "application/json", data = "<personas>")]
-pub fn add_personas (db: State<DBState>, jwt_key: State<LoginHandler>, personas: Json<Vec<PostPersona>>, token: Token) -> JsonResponse {
+pub fn add_personas (db: State<DBState>,
+                     jwt_key: State<LoginHandler>,
+                     personas: Json<Vec<PostPersona>>,
+                     token: Token) -> JsonResponse {
     let jwt = (*jwt_key).verify_or_respond (&token)?;
 
     (&*personas).into_iter().map(|persona|
         persona
             .to_new_persona (jwt.custom.user_id)
             .register(&db)
-            .and_then(|persona| NewContact::new_default_from_persona (persona.id)
+            .and_then(|persona| NewContact::new_default_from_persona (&persona)
                 .register(&db))
     )
     .collect::<Result<Vec<Contact>, _>> ()
@@ -91,7 +97,10 @@ pub fn get_persona_by_key (db: State<DBState>,
 }
 
 #[get("/personas/key?<id>")]
-pub fn get_key_for_persona (db: State<DBState>, jwt_key: State<LoginHandler>, persona_key: State<PersonaJwtHandler>, id: i64, token: Token) -> JsonResponse {
+pub fn get_key_for_persona (db: State<DBState>,
+                            jwt_key: State<LoginHandler>,
+                            persona_key: State<PersonaJwtHandler>,
+                            id: i64, token: Token) -> JsonResponse {
     let jwt = (*jwt_key).verify_or_respond(&token)?;
 
     let persona = Persona::query_by_id(id, &db)

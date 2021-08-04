@@ -15,6 +15,7 @@ dotenv = "0.15.0"
 rocket = { version = "0.4.8", features = ["private-cookies"] }
 rocket_contrib = "*"
 serde = { version = "1.0.124", features = ["derive"] }
+diesel-derive-enum = { version = "1.1.1", features = ["postgres"] }
 serde_json = "1.0"
 bcrypt = "0.8"
 base64 = "0.13.0"

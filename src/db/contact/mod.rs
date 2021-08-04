@@ -6,35 +6,66 @@ use self::info::Info;
 
 use super::{ConjuctionTable, DefaultConnection, QueryById, schema::{contacts, users_contacts_join}, user::{NewUser, User}, Register, Update};
 use crate::{impl_query_by_id, update, delete};
+use rocket::logger::warn;
 
 pub mod info;
+
+#[derive(Copy, Clone)]
+pub enum Visibilty {
+    Local, Private, Public
+}
+
+impl From<Visibilty> for i16 {
+    fn from(v: Visibilty) -> Self {
+        match v {
+            Visibilty::Local => 0,
+            Visibilty::Private => 1,
+            Visibilty::Public => 2
+        }
+    }
+}
+
+impl From<i16> for Visibilty {
+    fn from(i: i16) -> Self {
+        match i {
+            0 => Visibilty::Local,
+            1 => Visibilty::Private,
+            _ => Visibilty::Public
+        }
+    }
+}
 
 #[derive(Insertable, Serialize, Deserialize, Clone, Debug)]
 #[table_name="contacts"]
 pub struct NewContact {
     pub name: String,
     pub icon: Option<Vec<u8>>,
-    pub persona: Option<i64>
+    visibility: i16
 }
 
 impl_register_for!(NewContact, Contact, contacts::table);
 
 impl NewContact {
     
-    pub fn new(name: String, icon: Option<Vec<u8>>, persona: Option<i64>) -> Self { Self { name, icon, persona } }
+    pub fn new(name: String, icon: Option<Vec<u8>>, visibility: Visibilty) -> Self {
+        Self { name, icon,
+            visibility: visibility.into()
+        }
+    }
 
     pub fn new_default() -> Self {
         Self::new(
             "No Name".to_string (),
             None,
-            None
+            Visibilty::Local.into()
         )
     }
 
-    pub fn new_default_from_persona(persona: i64) -> Self {
-        let mut this = Self::new_default ();
-        this.persona = Some(persona);
-        this
+    fn visibility(&self) -> Visibilty {
+        self.visibility.into()
+    }
+    fn set_visibility(&mut self, v: Visibilty) {
+        self.visibility = v.into()
     }
 
 }
@@ -44,7 +75,16 @@ impl NewContact {
 pub struct UpdateContact {
     pub name: Option<String>,
     pub icon: Option<Option<Vec<u8>>>,
-    pub persona: Option<Option<i64>>
+    visibility: Option<i16>
+}
+
+impl UpdateContact {
+    fn visibility(&self) -> Option<Visibilty> {
+        self.visibility.map(|v| v.into())
+    }
+    fn set_visibility(&mut self, v: Option<Visibilty>) {
+        self.visibility = v.map(|v| v.into())
+    }
 }
 
 update!(UpdateContact => NewContact, i64);
@@ -55,17 +95,7 @@ pub struct Contact {
     pub id: i64,
     pub name: String,
     pub icon: Option<Vec<u8>>,
-    pub persona: Option<i64>,
-}
-
-impl Contact {
-
-    pub fn of_persona (persona: i64, db: &DefaultConnection) -> Result<Contact, diesel::result::Error> {
-        contacts::table
-            .filter(contacts::persona.eq (persona))
-            .first::<Contact> (db)
-    }
-
+    visibility: i16
 }
 
 impl_query_by_id!(Contact => contacts::table);
@@ -116,6 +146,8 @@ pub trait IsContact {
         User::query_by_id(id, db)
     }
 
+    fn visibility(&self) -> Visibilty;
+    fn set_visibility(&mut self, v: Visibilty);
 }
 
 impl IsContact for ContactDescriptor {
@@ -123,7 +155,13 @@ impl IsContact for ContactDescriptor {
     fn id (&self) -> ContactDescriptor {
         self.clone ()
     }
-
+    fn visibility(&self) -> Visibilty {
+        eprintln!("Invalid getter: ContactDescriptor.visibility at src/db/contact/mod.rs:{}", line!());
+        Visibilty::Local
+    }
+    fn set_visibility(&mut self, _: Visibilty) {
+        eprintln!("Invalid setter: ContactDescriptor.set_visibility at src/db/contact/mod.rs:{}", line!());
+    }
 }
 
 impl IsContact for Contact {
@@ -134,6 +172,14 @@ impl IsContact for Contact {
 
     fn get_contact(&self, _: &DefaultConnection) -> Result<Contact, diesel::result::Error> {
         Ok(self.clone ())
+    }
+
+    fn visibility(&self) -> Visibilty {
+        self.visibility.into()
+    }
+
+    fn set_visibility(&mut self, v: Visibilty) {
+        self.visibility = v.into()
     }
 }
 

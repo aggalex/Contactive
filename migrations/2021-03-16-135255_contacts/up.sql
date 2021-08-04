@@ -7,25 +7,24 @@ CREATE TABLE users (
   password VARCHAR(64) NOT NULL,
   level INTEGER NOT NULL
 );
-
-CREATE TABLE personas (
-    id BIGSERIAL PRIMARY KEY,
-    name VARCHAR(64) NOT NULL,
-    private BOOLEAN NOT NULL DEFAULT FALSE,
-    user_id BIGINT NOT NULL,
-
-    UNIQUE (user_id, name),
-
-    FOREIGN KEY (user_id) 
-        REFERENCES users(id) 
-        ON DELETE CASCADE
-);
+--
+-- CREATE TABLE personas (
+--     id BIGSERIAL PRIMARY KEY,
+--     private BOOLEAN NOT NULL DEFAULT FALSE,
+--     user_id BIGINT NOT NULL,
+--
+--     UNIQUE (user_id, name),
+--
+--     FOREIGN KEY (user_id)
+--         REFERENCES users(id)
+--         ON DELETE CASCADE
+-- );
 
 CREATE TABLE contacts (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(64) NOT NULL,
     icon BYTEA,
-    persona BIGINT NULL UNIQUE,
+    visibility SMALLINT CHECK(visibility IN (0, 1, 2)) NOT NULL,
 
     FOREIGN KEY (persona)
         REFERENCES personas(id)
