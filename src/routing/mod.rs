@@ -32,6 +32,7 @@ pub fn start () -> Rocket {
         contacts::info::post_info_by_data,
         contacts::info::post_info_by_url,
         contacts::info::delete_info,
+        contacts::info::patch_info,
         contacts::personas::get_personas,
         contacts::personas::get_personas_of_user,
         contacts::personas::get_persona_by_key,
