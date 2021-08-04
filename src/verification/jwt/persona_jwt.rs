@@ -40,7 +40,7 @@ impl Verifier for PersonaJwtHandler {
     type Destination = (User, DBState);
 
     fn reauthorize(&self, source: &String, destination: &mut (User, DBState)) -> Result<(), Box<dyn Error>> {
-        let (u, db) = destination;
+        let (_, db) = destination;
         let claims = self.verify(source)?;
         let persona = Persona::query_by_id(claims.custom.0, db)?;
         self.authorize(destination, persona)

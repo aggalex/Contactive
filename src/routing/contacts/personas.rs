@@ -97,7 +97,7 @@ pub fn get_key_for_persona (db: State<DBState>, jwt_key: State<LoginHandler>, pe
     let persona = Persona::query_by_id(id, &db)
         .to_status()?;
     
-    if persona.user_id != jwt.custom.user_id && persona.private {
+    if persona.user_id != jwt.custom.user_id || persona.private {
         return Err(Status::Unauthorized);
     }
 
@@ -110,6 +110,13 @@ pub fn get_key_for_persona (db: State<DBState>, jwt_key: State<LoginHandler>, pe
 pub fn delete_persona (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64, token: Token) -> EmptyResponse {
     let jwt = (*jwt_key).verify_or_respond(&token)?;
 
+    let persona = Persona::query_by_id(id, &db)
+        .to_status()?;
+
+    if persona.user_id != jwt.custom.user_id {
+        return Err(Status::Unauthorized);
+    }
+
     Persona::delete(&**db, id).to_status()?;
 
     Ok(())
@@ -118,6 +125,13 @@ pub fn delete_persona (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64
 #[patch("/personas/<id>", format = "application/json", data = "<persona>")]
 pub fn edit_persona (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64, persona: Json<UpdatePersona>, token: Token) -> JsonResponse {
     let jwt = (*jwt_key).verify_or_respond(&token)?;
+
+    let dbpersona = Persona::query_by_id(id, &db)
+        .to_status()?;
+
+    if dbpersona.user_id != jwt.custom.user_id && dbpersona.private {
+        return Err(Status::Unauthorized);
+    }
 
     persona.update(&**db, id).to_status()?
         .to_json()
