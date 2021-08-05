@@ -4,13 +4,15 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, result::{DatabaseErrorKin
 use serde::{Deserialize, Serialize, ser::SerializeMap};
 use serde::Serializer;
 
-use crate::{db::{DefaultConnection, Register, schema::info}, impl_register_for, update};
+use crate::{db::{DefaultConnection, Register, schema::info}, impl_register_for};
 
-use super::{ContactDescriptor, IsContact};
-use crate::db::{Update, Delete};
+use super::{IsContact};
+use crate::db::{Delete, ConjuctionTable};
 use diesel::result::Error;
 use crate::db::schema::info::dsl::key;
 use crate::db::schema::info::columns::contact_id;
+use crate::db::user::{ForUser, UserId};
+use crate::db::contact::{Contact, UserContactRelation};
 
 #[derive(Queryable, Insertable, AsChangeset, Deserialize, Clone, Debug)]
 #[table_name="info"]
@@ -30,13 +32,9 @@ impl InfoFragment {
         }
     }
 
-    pub fn delete(self, db: &DefaultConnection) -> Result<(), diesel::result::Error> {
-        <InfoFragment as Delete>::delete(db, self)?;
-        Ok(())
-    }
-
 }
 
+#[derive(Clone)]
 pub struct InfoSection {
     pub name: String,
     pub contact: i64
@@ -49,13 +47,85 @@ impl InfoSection {
     }
 }
 
-impl Delete for InfoFragment {
+pub trait ForContact {
+    fn contact_id(&self) -> i64;
+}
+
+impl ForContact for InfoFragment {
+    fn contact_id(&self) -> i64 {
+        self.contact_id
+    }
+}
+
+impl ForContact for InfoSection {
+    fn contact_id(&self) -> i64 {
+        self.contact
+    }
+}
+
+pub struct Jurisdiction<V: ForContact> (Vec<V>);
+
+impl<V: ForContact> Jurisdiction<V> {
+    pub fn new (user: UserId, items: Vec<V>, db: &DefaultConnection) -> diesel::result::QueryResult<Jurisdiction<V>> {
+        let mut contacts = HashSet::<i64>::new();
+        Ok(Jurisdiction(items.into_iter()
+            .map(|item| {
+                let contact = item.contact_id();
+                if contacts.contains(&contact) {
+                    Ok(item)
+                } else {
+                    UserContactRelation(user.0, contact).check_relation(db)?;
+                    contacts.insert(contact);
+                    Ok(item)
+                }
+            })
+            .collect::<diesel::result::QueryResult<Vec<V>>>()?))
+    }
+}
+
+impl Delete for Jurisdiction<InfoFragment> {
+    type Table = info::table;
+    const TABLE: Self::Table = info::table;
+    type PrimaryKey = ();
+
+    fn delete(&self, db: &DefaultConnection, _: ()) -> Result<usize, Error> {
+        let (keyvals, contact_ids): (Vec<(String, String)>, Vec<i64>) = self.0.clone().into_iter()
+            .map(|v| ((v.key, v.value), v.contact_id))
+            .unzip();
+        let (keys, values): (Vec<String>, Vec<String>) = keyvals.into_iter()
+            .unzip();
+        diesel::delete(info::table).filter(
+            info::key.eq_any(keys)
+                .and(info::value.eq_any(values))
+                .and(info::contact_id.eq_any(contact_ids)))
+            .execute(db)
+    }
+}
+
+impl Delete for Jurisdiction<InfoSection> {
+    type Table = info::table;
+    const TABLE: Self::Table = info::table;
+    type PrimaryKey = ();
+
+    fn delete(&self, db: &DefaultConnection, _: ()) -> Result<usize, Error> {
+        let (contacts, names): (Vec<i64>, Vec<String>) = self.0.clone().into_iter()
+            .map(|v| (v.contact, v.name))
+            .unzip();
+        diesel::delete(info::table).filter(
+            info::key.eq_any(names)
+                .and(info::contact_id.eq_any(contacts))
+        ).execute(db)
+    }
+}
+
+impl Delete for ForUser<InfoFragment> {
     type Table = info::table;
     const TABLE: Self::Table = info::table;
     type PrimaryKey = InfoFragment;
 
-    fn delete(db: &DefaultConnection, id: Self::PrimaryKey) -> Result<usize, Error> {
-        diesel::delete(info::table.find((id.key, id.value, id.contact_id))).execute(db)
+    fn delete(&self, db: &DefaultConnection, framgent: Self::PrimaryKey) -> Result<usize, Error> {
+        self.into::<Contact>().has_jurisdiction(framgent.contact_id, db)?;
+        diesel::delete(info::table.find((framgent.key, framgent.value, framgent.contact_id))).execute(db)
     }
 }
 
@@ -79,12 +149,6 @@ pub struct Info {
 }
 
 pub type BareInfo = HashMap<String, Vec<String>>;
-
-impl IsContact for Info {
-    fn id (&self) -> super::ContactDescriptor {
-        ContactDescriptor(self.contact_id)
-    }
-}
 
 impl Info {
 

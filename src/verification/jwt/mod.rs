@@ -4,13 +4,12 @@ use jwt_simple::{prelude::{Claims, Duration, HS256Key, JWTClaims, MACLike}};
 use rocket::{http::Status, request::FromRequest};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::{db::user::{self, User}, routing::ToStatus};
+use crate::{db::user::User, routing::ToStatus};
 
 use self::blacklist::ThreadBlacklist;
 use self::jwt_data::JwtData;
 
 use super::{Blacklist, Verifier};
-use jwt_simple::prelude::UnixTimeStamp;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub mod jwt_data;

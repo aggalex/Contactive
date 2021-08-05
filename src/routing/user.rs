@@ -1,4 +1,4 @@
-use crate::{db::{DBState, Register, persona::NewPersona, user::{IsUser, NewUser, Password, User}}, derive_password, verification::jwt::{JwtHandler, LoginHandler, jwt_data::JwtData}};
+use crate::{db::{DBState, Register, user::{IsUser, NewUser, Password, User}}, derive_password, verification::jwt::{JwtHandler, LoginHandler, jwt_data::JwtData}};
 use crate::rocket::State;
 use rocket::http::Status;
 use rocket_contrib::json::Json;
@@ -9,6 +9,7 @@ use crate::verification::{*, jwt::Token};
 use super::EmptyResponse;
 use crate::routing::{JsonResponse, ToJson};
 use crate::db::QueryById;
+use crate::db::user::UserId;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RegisterUser {
@@ -45,8 +46,7 @@ pub fn register (user: Json<RegisterUser>, db: State<DBState>, jwt_key: State<Lo
         .catch(Status::InternalServerError)?;
     
     user.register(&db)
-        .and_then(|user| NewPersona::new_default (user.id).register (&db))
-        .to_status ()?;
+        .to_status()?;
 
     login(Json(login_data), db, jwt_key)
 }
@@ -101,26 +101,24 @@ pub fn logout (jwt_key: State<LoginHandler>, token: Token) -> EmptyResponse {
 }
 
 #[delete("/", format = "application/json", data = "<login>")]
-pub fn delete (login: Json<Login>, jwt_key: State<LoginHandler>, db: State<DBState>, token: Token) -> EmptyResponse {
-    let jwt = super::Verifier::verify_or_respond(&*jwt_key, &token)?;
-
-    let user = User::query_by_username(&login.username, &**db)
+pub fn delete (login: Json<Login>, db: State<DBState>, user: UserId) -> EmptyResponse {
+    let dbuser = User::query_by_username(&login.username, &**db)
         .to_status()?;
 
-    if user.id != jwt.custom.user_id && user.level < 1 {
+    if dbuser.id != *user && dbuser.level < 1 {
         return Err(Status::Unauthorized)
     }
 
     let auth = login
         .encrypt ()
-        .password_cmp (&user)
+        .password_cmp (&dbuser)
         .catch(Status::InternalServerError)?;
 
     if !auth {
         return Err(Status::Unauthorized)
     }
 
-    user
+    dbuser
         .delete(&db)
         .to_status()?;
 
@@ -145,16 +143,15 @@ impl From<User> for Me {
 }
 
 #[get("/me")]
-pub fn me (jwt_key: State<LoginHandler>, db: State<DBState>, token: Token) -> JsonResponse {
-    println!("Me! token = {}", token.0);
-    let jwt = super::Verifier::verify_or_respond(&*jwt_key, &token)?;
-    
-    Me::from(User::query_by_id(jwt.custom.user_id, &**db)
+pub fn me (db: State<DBState>, user: UserId) -> JsonResponse {
+    println!("Me! token = {}", *user);
+
+    Me::from(User::query_by_id(*user, &**db)
         .catch(Status::NotFound)?).to_json()
 }
 
 #[post("/renew")]
-pub fn renew (jwt_key: State<LoginHandler>, db: State<DBState>, token: Token) -> JsonResponse {
+pub fn renew (jwt_key: State<LoginHandler>, token: Token) -> JsonResponse {
     let mut out: String = "".to_string();
     jwt_key.reauthorize(&token, &mut out).map_err(|_| Status::Unauthorized)?;
     out.to_json()

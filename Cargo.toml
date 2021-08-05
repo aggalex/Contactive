@@ -6,16 +6,12 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[target.x86_64-unknown-linux-gnu]
-linker = "x86_64-linux-gnu-gcc"
-
 [dependencies]
 diesel = { version = "1.4.4", features = ["postgres", "chrono", "numeric"] }
 dotenv = "0.15.0"
 rocket = { version = "0.4.8", features = ["private-cookies"] }
 rocket_contrib = "*"
 serde = { version = "1.0.124", features = ["derive"] }
-diesel-derive-enum = { version = "1.1.1", features = ["postgres"] }
 serde_json = "1.0"
 bcrypt = "0.8"
 base64 = "0.13.0"

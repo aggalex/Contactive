@@ -4,6 +4,7 @@ table! {
         name -> Varchar,
         icon -> Nullable<Bytea>,
         visibility -> Int2,
+        creator -> Int8,
     }
 }
 
@@ -14,14 +15,14 @@ table! {
         contact_id -> Int8,
     }
 }
-
-table! {
-    personas (id) {
-        id -> Int8,
-        private -> Bool,
-        user_id -> Int8,
-    }
-}
+//
+// table! {
+//     personas (id) {
+//         id -> Int8,
+//         private -> Bool,
+//         user_id -> Int8,
+//     }
+// }
 
 table! {
     users (id) {
@@ -40,16 +41,13 @@ table! {
     }
 }
 
-joinable!(contacts -> personas (persona));
 joinable!(info -> contacts (contact_id));
-joinable!(personas -> users (user_id));
 joinable!(users_contacts_join -> contacts (contact_id));
 joinable!(users_contacts_join -> users (user_id));
 
 allow_tables_to_appear_in_same_query!(
     contacts,
     info,
-    personas,
     users,
     users_contacts_join,
 );

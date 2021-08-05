@@ -6,8 +6,8 @@ use crate::routing::{ToJson, EmptyResponse};
 use crate::verification::jwt::Token;
 use crate::db::{Delete, Update};
 use crate::db::contact::UpdateContact;
+use crate::db::user::{UserId, ForUser};
 
-pub mod personas;
 pub mod info;
 
 #[get("/contacts")]
@@ -41,17 +41,20 @@ pub fn add_contacts (db: State<DBState>, jwt_key: State<LoginHandler>, contacts:
 }
 
 #[delete("/contacts/<id>")]
-pub fn delete_contact (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64, token: Token) -> EmptyResponse {
-    let user = (*jwt_key).verify_or_respond (&token)?;
+pub fn delete_contact (db: State<DBState>, id: i64, user: UserId) -> EmptyResponse {
 
-    Contact::delete(&**db, id).to_status()?;
-    
+    ForUser::<Contact>::from(user).delete(&**db, id).to_status()?;
+
     Ok(())
 }
 
 #[patch("/contacts/<id>", format = "application/json", data = "<contact>")]
-pub fn edit_contact (db: State<DBState>, jwt_key: State<LoginHandler>, id: i64, contact: Json<UpdateContact>, token: Token) -> JsonResponse {
-    let user = (*jwt_key).verify_or_respond (&token)?;
-
-    contact.update(&**db, id).to_status()?.to_json()
+pub fn edit_contact (db: State<DBState>, id: i64, contact: Json<UpdateContact>, user: UserId) -> JsonResponse {
+    let factory: ForUser<UpdateContact> = user.into();
+    factory.get(contact.into_inner())
+        .update(&**db, id)
+        .to_status()?
+        .to_json()
 }
+
+

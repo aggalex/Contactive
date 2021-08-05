@@ -5,7 +5,6 @@ use dotenv::dotenv;
 
 #[macro_use] extern crate rocket;
 #[macro_use] extern crate diesel;
-#[macro_use] extern crate diesel_derive_enum;
 extern crate serde;
 extern crate serde_json;
 extern crate dotenv;

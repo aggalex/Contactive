@@ -1,9 +1,11 @@
-use rocket::{Rocket, http::Status};
+use rocket::{Rocket, http::Status, Request, request::Outcome};
 use serde::Serialize;
 use rocket::http::Method;
 use rocket_cors::{AllowedOrigins, CorsOptions};
 
-use crate::verification::jwt::LoginHandler;
+use crate::verification::jwt::{LoginHandler, Token};
+use rocket::request::FromRequest;
+use crate::db::user::UserId;
 
 pub mod user;
 pub mod contacts;
@@ -34,13 +36,6 @@ pub fn start () -> Rocket {
         contacts::info::post_info_by_url,
         contacts::info::delete_info,
         contacts::info::patch_info,
-        contacts::personas::get_personas,
-        contacts::personas::add_personas,
-        contacts::personas::get_personas_of_user,
-        contacts::personas::get_persona_by_key,
-        contacts::personas::get_key_for_persona,
-        contacts::personas::delete_persona,
-        contacts::personas::edit_persona
     ]).attach(CorsOptions::default()
         .allowed_origins(AllowedOrigins::all())
         .allowed_methods(
@@ -93,6 +88,20 @@ trait Verifier: crate::verification::Verifier {
         self.verify (cookies).catch(Status::Unauthorized)
     }
 
+}
+
+impl<'a, 'r> FromRequest<'a, 'r> for UserId {
+    type Error = ();
+
+    fn from_request(request: &'a Request<'r>) -> Outcome<Self, ()> {
+        let key = request.guard::<rocket::State::<LoginHandler>>()?;
+        let token = request.guard::<Token>().map_failure(|_| (Status::Unauthorized, ()))?;
+
+        match key.verify_or_respond (&token) {
+            Ok(claims) => Outcome::Success(UserId::new(claims.custom.user_id)),
+            Err(_) => Outcome::Failure((Status::Unauthorized, ()))
+        }
+    }
 }
 
 impl<V: crate::verification::Verifier> Verifier for V {}

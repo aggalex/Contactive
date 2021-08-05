@@ -1,16 +1,12 @@
-use diesel::{Connection, Expression, Insertable, QuerySource, RunQueryDsl, Table, insertable::CanInsertInSingleQuery, pg::PgConnection, query_builder::QueryFragment, result::Error, types::HasSqlType, Identifiable};
+use diesel::{Connection, Expression, Table, pg::PgConnection, result::Error};
 use rocket::http::Status;
 use std::env;
-use crate::diesel::QueryDsl;
 
 use crate::routing::ToStatus;
-use diesel::query_builder::{AsChangeset, AsQuery};
-use diesel::query_dsl::filter_dsl::FilterDsl;
-use diesel::associations::HasTable;
-
+use diesel::query_builder::{AsChangeset};
 pub mod schema;
 pub mod user;
-pub mod persona;
+// pub mod persona;
 pub mod contact;
 
 fn establish_connection() -> PgConnection {
@@ -61,24 +57,14 @@ unsafe impl Sync for DBState {
 pub type DefaultConnection = PgConnection;
 pub type DefaultBackend = <DefaultConnection as Connection>::Backend;
 
-pub trait Register: Insertable<Self::Table> + Sized 
-    where 
-    <Self::Table as QuerySource>::FromClause: QueryFragment<DefaultBackend>,
-    Self::Values: QueryFragment<DefaultBackend> + CanInsertInSingleQuery<DefaultBackend>,
-    <Self::Table as Table>::AllColumns: QueryFragment<DefaultBackend>,
-    DefaultBackend: HasSqlType<<<Self::Table as Table>::AllColumns as diesel::Expression>::SqlType>
-{
+pub trait Register: {
 
     type Table: Table;
     const TABLE: Self::Table;
 
     type Queryable: diesel::Queryable<<<Self::Table as diesel::Table>::AllColumns as Expression>::SqlType, <DefaultConnection as Connection>::Backend>;
 
-    fn register (self, db: &DefaultConnection) -> Result<Self::Queryable, diesel::result::Error> {
-        diesel::insert_into(Self::TABLE)
-            .values(self)
-            .get_result::<Self::Queryable>(db)
-    }
+    fn register (self, db: &DefaultConnection) -> diesel::result::QueryResult<Self::Queryable>;
     
 }
 
@@ -100,7 +86,7 @@ pub trait Delete {
 
     type PrimaryKey;
 
-    fn delete (db: &DefaultConnection, id: Self::PrimaryKey) -> Result<usize, diesel::result::Error>;
+    fn delete (&self, db: &DefaultConnection, id: Self::PrimaryKey) -> Result<usize, diesel::result::Error>;
 }
 
 #[macro_export]
@@ -113,7 +99,7 @@ macro_rules! delete {
             type PrimaryKey = $key;
 
             fn delete (db: &DefaultConnection, id: Self::PrimaryKey) -> Result<usize, diesel::result::Error> {
-                diesel::delete(Self::TABLE.find(id)).execute(db)
+                diesel::delete(<Self as crate::db::Delete>::TABLE.find(id)).execute(db)
             }
 
         }
@@ -132,7 +118,7 @@ macro_rules! update {
             type PrimaryKey = $key;
 
             fn update(&self, db: &DefaultConnection, id: Self::PrimaryKey) -> Result<Self::Queryable, diesel::result::Error> {
-                diesel::update(Self::TABLE.find(id))
+                diesel::update(<Self as crate::db::Update>::TABLE.find(id))
                     .set(self)
                     .get_result(db)
             }
@@ -159,38 +145,15 @@ macro_rules! impl_query_by_id {
     };
 }
 
-pub trait ConjuctionTable: Register
-    where 
-    <Self::Table as QuerySource>::FromClause: QueryFragment<DefaultBackend>,
-    Self::Values: QueryFragment<DefaultBackend> + CanInsertInSingleQuery<DefaultBackend>,
-    <Self::Table as Table>::AllColumns: QueryFragment<DefaultBackend>,
-    DefaultBackend: HasSqlType<<<Self::Table as Table>::AllColumns as diesel::Expression>::SqlType>,
-
-    <<Self::A as Register>::Table as QuerySource>::FromClause: QueryFragment<DefaultBackend>,
-    <Self::A as Insertable<<Self::A as Register>::Table>>::Values: QueryFragment<DefaultBackend> + CanInsertInSingleQuery<DefaultBackend>,
-    <<Self::A as Register>::Table as Table>::AllColumns: QueryFragment<DefaultBackend>,
-    DefaultBackend: HasSqlType<<<<Self::A as Register>::Table as Table>::AllColumns as diesel::Expression>::SqlType>,
-    <Self::A as Register>::Queryable: QueryById,
-
-    <<Self::B as Register>::Table as QuerySource>::FromClause: QueryFragment<DefaultBackend>,
-    <Self::B as Insertable<<Self::B as Register>::Table>>::Values: QueryFragment<DefaultBackend> + CanInsertInSingleQuery<DefaultBackend>,
-    <<Self::B as Register>::Table as Table>::AllColumns: QueryFragment<DefaultBackend>,
-    DefaultBackend: HasSqlType<<<<Self::B as Register>::Table as Table>::AllColumns as diesel::Expression>::SqlType>,
-    <Self::B as Register>::Queryable: QueryById
-
+pub trait ConjuctionTable: Register + Sized
 {
 
-    type A: Register + Sized;
-    type B: Register + Sized;
+    type A;
+    type B;
 
-    fn as_tuple (&self) -> (i64, i64);
-
-    fn get_both(&self, db: &DefaultConnection) -> Result<(<Self::A as Register>::Queryable, <Self::B as Register>::Queryable), diesel::result::Error> {
-        let (aid, bid) = self.as_tuple ();
-        let a = <<Self::A as Register>::Queryable as QueryById>::query_by_id (aid, db)?;
-        let b = <<Self::B as Register>::Queryable as QueryById>::query_by_id (bid, db)?;
-        Ok((a, b))
-    }
+    fn get_both(&self, db: &DefaultConnection)
+        -> diesel::result::QueryResult<(Self::A, Self::B)>;
+    fn check_relation(&self, db: &DefaultConnection) -> diesel::result::QueryResult<Self>;
 
 }
 
@@ -223,6 +186,12 @@ macro_rules! impl_register_for {
             type Table = $table;
             const TABLE: $table = $table;
             type Queryable = $query_type;
+
+            fn register(self, db: &DefaultConnection) -> diesel::result::QueryResult<Self::Queryable> {
+                diesel::insert_into(<Self as crate::db::Register>::TABLE)
+                    .values(self)
+                    .get_result::<Self::Queryable>(db)
+            }
         }
     };
 }

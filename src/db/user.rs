@@ -1,12 +1,13 @@
-use super::{DefaultConnection, contact::Contact, persona::Persona, schema::{users, contacts, personas, users_contacts_join}};
+use super::{DefaultConnection, contact::Contact, schema::{users, contacts, users_contacts_join}};
 use diesel::{QueryDsl, RunQueryDsl};
 use serde::{Serialize, Deserialize};
 use bcrypt::{BcryptError, DEFAULT_COST, hash, verify};
 use sha2::{Digest, Sha512};
 use crate::{diesel::ExpressionMethods, impl_query_by_id, impl_register_for};
-use crate::db::{Update, Register};
+use crate::db::Delete;
+use crate::update;
+use std::marker::PhantomData;
 use diesel::result::Error;
-use crate::{update, delete};
 
 #[derive(Clone, Queryable, Debug)]
 pub struct User {
@@ -49,7 +50,21 @@ pub struct UpdateUser {
 }
 
 update! (UpdateUser => NewUser, i64);
-delete! (User => NewUser, i64);
+
+impl Delete for ForUser<User> {
+    type Table = users::table;
+    const TABLE: Self::Table = users::table;
+    type PrimaryKey = i64;
+
+    fn delete(&self, db: &DefaultConnection, id: Self::PrimaryKey) -> Result<usize, Error> {
+        if self.0 != id {
+            return Err(Error::NotFound)
+        }
+        diesel::delete(users::table)
+            .filter(users::id.eq(id))
+            .execute(db)
+    }
+}
 
 impl NewUser {
     pub fn new(username: String, email: String, password: String) -> Self { Self { username, email, password, level: 0 } }
@@ -94,17 +109,6 @@ pub trait IsUser {
 
     fn id (&self) -> i64;
 
-    fn get_personas (&self, db: &DefaultConnection) -> Result<Vec<(Contact, Persona)>, diesel::result::Error>;
-
-    fn get_public_personas (&self, db: &DefaultConnection) -> Result<Vec<(Contact, Persona)>, diesel::result::Error> {
-        Ok (
-            self.get_personas (db)?
-                .into_iter ()
-                .filter (|tuple| !tuple.1.private)
-                .collect::<Vec<(Contact, Persona)>> ()
-        )
-    }
-
     fn get_contacts (&self, db: &DefaultConnection) -> Result<Vec<Contact>, diesel::result::Error>;
 
     fn delete (&self, db: &DefaultConnection) -> Result<usize, diesel::result::Error>;
@@ -141,13 +145,6 @@ impl<U: DBUser> IsUser for U {
 
     fn id (&self) -> i64 {
         self.id ()
-    }
-
-    fn get_personas (&self, db: &DefaultConnection) -> Result<Vec<(Contact, Persona)>, diesel::result::Error>  {
-        contacts::table
-            .inner_join(personas::table)
-            .filter(personas::user_id.eq(self.id ()))
-            .load::<(Contact, Persona)> (db)
     }
 
     fn get_contacts (&self, db: &DefaultConnection) -> Result<Vec<Contact>, diesel::result::Error> {
@@ -187,5 +184,37 @@ impl DBUser for UserDescriptor {
         self.0
     }
 
+}
 
+#[derive(Copy, Clone, Eq, PartialOrd, PartialEq, Ord)]
+pub struct UserId(pub(in crate::db) i64);
+
+impl UserId {
+    pub fn new(id: i64) -> UserId {
+        UserId(id)
+    }
+}
+
+impl std::ops::Deref for UserId {
+    type Target = i64;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Copy, Clone, Eq, PartialOrd, PartialEq, Ord)]
+pub struct ForUser<T>(pub i64, PhantomData<T>);
+
+impl<T> ForUser<T> {
+    pub fn into<G>(&self) -> ForUser<G> {
+        ForUser(self.0, PhantomData)
+    }
+}
+
+impl<T> From<UserId> for ForUser<T> {
+    fn from(user: UserId) -> Self {
+        ForUser (user.0, PhantomData)
+    }
 }
