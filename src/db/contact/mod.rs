@@ -9,7 +9,7 @@ use crate::update;
 use crate::db::user::ForUser;
 use diesel::result::Error;
 use crate::db::schema::users;
-use crate::db::Delete;
+use crate::db::{Delete, Register};
 
 pub mod info;
 
@@ -38,6 +38,23 @@ impl From<i16> for Visibility {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PostContact {
+    pub name: String,
+    pub icon: Option<Vec<u8>>,
+    visibility: i16,
+}
+
+impl ForUser<PostContact> {
+    pub fn relate(&self, this: PostContact) -> NewContact {
+        self.into::<NewContact>().new(
+            this.name,
+            this.icon,
+            this.visibility
+        )
+    }
+}
+
 #[derive(Insertable, Serialize, Deserialize, Clone, Debug)]
 #[table_name="contacts"]
 pub struct NewContact {
@@ -47,7 +64,24 @@ pub struct NewContact {
     pub creator: i64
 }
 
-impl_register_for!(NewContact, Contact, contacts::table);
+impl Register for NewContact {
+    type Table = contacts::table;
+    const TABLE: Self::Table = contacts::table;
+    type Queryable = Contact;
+
+    fn register(self, db: &DefaultConnection) -> QueryResult<Self::Queryable> {
+        let out = diesel::insert_into(<Self as crate::db::Register>::TABLE)
+            .values(self)
+            .get_result::<Self::Queryable>(db)?;
+
+        UserContactRelation (
+            out.creator,
+            out.id
+        ).register(db)?;
+
+        Ok(out)
+    }
+}
 
 impl NewContact {
 
@@ -61,7 +95,7 @@ impl NewContact {
 }
 
 impl ForUser<NewContact> {
-    pub fn new(&self, name: String, icon: Option<Vec<u8>>, vis: Visibility) -> NewContact {
+    pub fn new(&self, name: String, icon: Option<Vec<u8>>, vis: impl Into<i16>) -> NewContact {
         NewContact { name, icon,
             visibility: vis.into(),
             creator: self.0
@@ -72,7 +106,7 @@ impl ForUser<NewContact> {
         self.new(
             "No Name".to_string (),
             None,
-            Visibility::Local.into()
+            Visibility::Local
         )
     }
 }
