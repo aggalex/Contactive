@@ -12,7 +12,7 @@ CREATE TABLE contacts (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(64) NOT NULL,
     icon BYTEA,
-    creator BIGINT NOT NULL
+    creator BIGINT NOT NULL,
         
     visibility SMALLINT CHECK(visibility IN (0, 1, 2)) NOT NULL,
     -- 0 = Local
