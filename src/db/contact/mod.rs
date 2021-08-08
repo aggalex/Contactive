@@ -8,7 +8,7 @@ use super::{ConjuctionTable, DefaultConnection, schema::{contacts, users_contact
 use crate::update;
 use crate::db::user::ForUser;
 use diesel::result::Error;
-use crate::db::schema::{users, search_sort};
+use crate::db::schema::{users, search_sort, lower};
 use crate::db::{Delete, Register};
 
 pub mod info;
@@ -187,8 +187,9 @@ impl Contact {
     pub fn search_public(db: &DefaultConnection, page: i64, buffer: i64, query: String) -> diesel::result::QueryResult<Vec<Contact>> {
         contacts::table.filter(
                 contacts::visibility.ge(2)
-                    .and(contacts::name.like(format!("%{}%", query))))
+                    .and(lower(contacts::name).like(format!("%{}%", query.to_lowercase()))))
             .order(search_sort(contacts::name, query))
+            .then_order_by(contacts::name.asc())
             .offset(page * buffer)
             .limit(buffer)
             .load(db)

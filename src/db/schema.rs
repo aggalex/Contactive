@@ -52,3 +52,7 @@ allow_tables_to_appear_in_same_query!(
 sql_function! {
     fn search_sort (name: Varchar, query: Varchar) -> i16;
 }
+
+sql_function! {
+    fn lower (string: Varchar) -> Varchar;
+}

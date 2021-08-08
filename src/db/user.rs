@@ -152,6 +152,7 @@ impl<U: DBUser> IsUser for U {
             users_contacts_join::table
                 .filter (users_contacts_join::user_id.eq(self.id ()))
                 .inner_join (contacts::table)
+                .order(contacts::name.asc())
                 .load::<((i64, i64), Contact)> (db)?
                 .into_iter ()
                 .map (|descriptor| descriptor.1)

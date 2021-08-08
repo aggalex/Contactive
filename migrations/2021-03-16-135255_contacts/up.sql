@@ -58,11 +58,16 @@ RETURNS SMALLINT
 LANGUAGE plpgsql
 AS
 $$
+    DECLARE
+        q VARCHAR(64);
+        n VARCHAR(64);
     BEGIN
-    RETURN CASE
-        WHEN name LIKE CONCAT(query, '%') THEN 1
-        WHEN name LIKE CONCAT('%', query, '%') THEN 2
-        ELSE 3
-    END;
-END
+        q = LOWER(query);
+        n = LOWER(name);
+        RETURN CASE
+            WHEN n LIKE CONCAT(q, '%') THEN 1
+            WHEN n LIKE CONCAT('%', q, '%') THEN 2
+            ELSE 3
+        END;
+    END
 $$;
