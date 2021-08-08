@@ -49,3 +49,15 @@ CREATE TABLE info (
         REFERENCES contacts(id)
         ON DELETE CASCADE
 );
+
+CREATE FUNCTION search_sort(
+    @name AS VARCHAR(64)
+    @query AS VARCHAR(64)
+) RETURNS SMALLINT
+AS BEGIN
+    RETURN CASE
+        WHEN @name LIKE CONCAT(@QUERY, "%") THEN 1
+        WHEN @name LIKE CONCAT("%", @QUERY, "%") THEN 2
+        ELSE 3
+    END
+END

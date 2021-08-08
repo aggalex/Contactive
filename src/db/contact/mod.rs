@@ -8,7 +8,7 @@ use super::{ConjuctionTable, DefaultConnection, schema::{contacts, users_contact
 use crate::update;
 use crate::db::user::ForUser;
 use diesel::result::Error;
-use crate::db::schema::users;
+use crate::db::schema::{users, search_sort};
 use crate::db::{Delete, Register};
 
 pub mod info;
@@ -188,6 +188,7 @@ impl Contact {
         contacts::table.filter(
                 contacts::visibility.ge(2)
                     .and(contacts::name.like(format!("%{}%", query))))
+            .order(search_sort(contacts::name, query))
             .offset(page * buffer)
             .limit(buffer)
             .load(db)

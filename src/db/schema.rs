@@ -1,3 +1,5 @@
+use diesel::types::Varchar;
+
 table! {
     contacts (id) {
         id -> Int8,
@@ -26,7 +28,10 @@ table! {
     }
 }
 
-table! {
+table! {WHEN condition1 THEN result1
+    WHEN condition2 THEN result2
+    WHEN conditionN THEN resultN
+    ELSE result
     users_contacts_join (user_id, contact_id) {
         user_id -> Int8,
         contact_id -> Int8,
@@ -43,3 +48,7 @@ allow_tables_to_appear_in_same_query!(
     users,
     users_contacts_join,
 );
+
+sql_function! {
+    fn search_sort (name: Varchar, query: Varchar) -> i16;
+}
