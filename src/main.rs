@@ -1,4 +1,4 @@
-#![feature(proc_macro_hygiene, decl_macro, associated_type_defaults)]
+#![feature(proc_macro_hygiene, decl_macro, associated_type_defaults, generic_associated_types)]
 #![recursion_limit="512"]
 
 use dotenv::dotenv;

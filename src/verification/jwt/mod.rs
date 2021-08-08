@@ -4,13 +4,12 @@ use jwt_simple::{prelude::{Claims, Duration, HS256Key, JWTClaims, MACLike}};
 use rocket::{http::Status, request::FromRequest};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::{db::user::{self, User}, routing::ToStatus};
+use crate::{db::user::User, routing::ToStatus};
 
 use self::blacklist::ThreadBlacklist;
 use self::jwt_data::JwtData;
 
 use super::{Blacklist, Verifier};
-use jwt_simple::prelude::UnixTimeStamp;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub mod jwt_data;
@@ -138,7 +137,14 @@ impl<'a, 'r> FromRequest<'a, 'r> for Token {
 
     fn from_request(request: &'a rocket::Request<'r>) -> rocket::request::Outcome<Self, Self::Error> {
         match request.headers().get(AUTH_HEADER_NAME).next() {
-            Some(auth) => rocket::request::Outcome::Success(Token(auth.to_string())),
+            Some(auth) => rocket::request::Outcome::Success(Token({
+                let s = auth.to_string();
+                if s.starts_with("Basic ") {
+                    s[6..].to_string()
+                } else {
+                    s
+                }
+            })),
             None => rocket::request::Outcome::Failure((Status::Unauthorized, jwt_simple::Error::msg("Unauthorized"),))
         }
     }

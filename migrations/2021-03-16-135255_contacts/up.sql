@@ -8,27 +8,19 @@ CREATE TABLE users (
   level INTEGER NOT NULL
 );
 
-CREATE TABLE personas (
-    id BIGSERIAL PRIMARY KEY,
-    name VARCHAR(64) NOT NULL,
-    private BOOLEAN NOT NULL DEFAULT FALSE,
-    user_id BIGINT NOT NULL,
-
-    UNIQUE (user_id, name),
-
-    FOREIGN KEY (user_id) 
-        REFERENCES users(id) 
-        ON DELETE CASCADE
-);
-
 CREATE TABLE contacts (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(64) NOT NULL,
     icon BYTEA,
-    persona BIGINT NULL UNIQUE,
+    creator BIGINT NOT NULL,
+        
+    visibility SMALLINT CHECK(visibility IN (0, 1, 2)) NOT NULL,
+    -- 0 = Local
+    -- 1 = Private
+    -- 2 = Public
 
-    FOREIGN KEY (persona)
-        REFERENCES personas(id)
+    FOREIGN KEY (creator)
+        REFERENCES users(id)
 );
 
 CREATE TABLE users_contacts_join (
