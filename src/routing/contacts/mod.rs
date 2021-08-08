@@ -72,7 +72,7 @@ pub fn get_by_key (db: State<DBState>,
                            user: UserId) -> JsonResponse {
     let contact = (*persona_key).extract (&key)
         .to_status()?
-        .custom.0;
+        .custom.id;
 
     let contact = Contact::force_get_by_id(contact, &db)
         .to_status()?;
@@ -98,7 +98,7 @@ pub fn get_key (db: State<DBState>, contact_key: State<ContactJwtHandler>, id: i
         return Err(Status::Unauthorized);
     }
 
-    ContactJwt(contact.id).encode(&contact_key.key)
+    ContactJwt { id: contact.id }.encode(&contact_key.key)
         .to_status()?
         .to_json()
 }

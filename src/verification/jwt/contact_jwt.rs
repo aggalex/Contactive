@@ -9,7 +9,9 @@ use crate::db::user::User;
 use std::error::Error;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
-pub struct ContactJwt(pub i64);
+pub struct ContactJwt {
+    pub id: i64,
+}
 
 impl Jwt for ContactJwt {
     fn encode<Key: jwt_simple::prelude::MACLike> (&self, key: &Key) -> Result<String, jwt_simple::Error> {
@@ -50,7 +52,7 @@ impl Verifier for ContactJwtHandler {
     fn reauthorize(&self, source: &String, destination: &mut (User, DBState)) -> Result<(), Box<dyn Error>> {
         let (_, db) = destination;
         let claims = self.verify(source)?;
-        let contact = Contact::force_get_by_id(claims.custom.0, db)?;
+        let contact = Contact::force_get_by_id(claims.custom.id, db)?;
         self.authorize(destination, contact)
     }
 
