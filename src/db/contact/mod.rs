@@ -207,6 +207,12 @@ impl ForUser<Contact> {
     }
 
     pub fn has_jurisdiction (&self, id: i64, db: &DefaultConnection) -> diesel::result::QueryResult<UserContactRelation> {
+        if Contact::force_get_by_id(id, db)?.visibility() == Visibility::Public {
+            return Ok(UserContactRelation (
+                self.0,
+                id
+            ))
+        }
         users_contacts_join::table.filter(users_contacts_join::user_id.eq(self.0)
             .and(users_contacts_join::contact_id.eq(id)))
             .first::<UserContactRelation>(db)
