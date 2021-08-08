@@ -47,4 +47,10 @@ pub fn edit_contact (db: State<DBState>, id: i64, contact: Json<UpdateContact>, 
         .to_json()
 }
 
-
+#[get("/contacts/public?<q>&<page>&<buffer>")]
+pub fn search_public_contacts (db: State<DBState>, q: String, page: u32, buffer: Option<u32>) -> JsonResponse {
+    let buffer = buffer.unwrap_or(10);
+    Contact::search_public(&**db, page as i64, buffer as i64, q)
+        .to_status()?
+        .to_json()
+}

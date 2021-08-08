@@ -15,14 +15,6 @@ table! {
         contact_id -> Int8,
     }
 }
-//
-// table! {
-//     personas (id) {
-//         id -> Int8,
-//         private -> Bool,
-//         user_id -> Int8,
-//     }
-// }
 
 table! {
     users (id) {

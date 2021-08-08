@@ -1,4 +1,4 @@
-use diesel::{QueryDsl, Queryable, BoolExpressionMethods, QueryResult};
+use diesel::{QueryDsl, Queryable, BoolExpressionMethods, QueryResult, TextExpressionMethods};
 use serde::{Deserialize, Serialize};
 use crate::impl_register_for;
 use crate::diesel::{RunQueryDsl, ExpressionMethods};
@@ -10,6 +10,7 @@ use crate::db::user::ForUser;
 use diesel::result::Error;
 use crate::db::schema::users;
 use crate::db::{Delete, Register};
+use sha2::digest::generic_array::typenum::private::IsGreaterOrEqualPrivate;
 
 pub mod info;
 
@@ -182,6 +183,15 @@ impl Contact {
     pub fn force_get_by_id(id: i64, db: &DefaultConnection) -> diesel::result::QueryResult<Contact> {
         contacts::table.filter(contacts::id.eq(id))
             .first::<Contact> (db)
+    }
+
+    pub fn search_public(db: &DefaultConnection, page: i64, buffer: i64, query: String) -> diesel::result::QueryResult<Vec<Contact>> {
+        contacts::table.filter(
+                contacts::visibility.ge(2)
+                    .and(contacts::name.like(format!("%{}%", query))))
+            .offset(page * buffer)
+            .limit(buffer)
+            .load(db)
     }
 }
 
