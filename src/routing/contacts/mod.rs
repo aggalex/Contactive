@@ -9,6 +9,8 @@ use crate::db::user::{UserId, ForUser};
 use crate::verification::jwt::contact_jwt::{ContactJwtHandler, ContactJwt};
 use crate::verification::jwt::{JwtHandler, Jwt};
 use rocket::http::Status;
+use serde::{Serialize, Deserialize};
+use crate::db::contact::info::BareInfo;
 
 pub mod info;
 
@@ -65,6 +67,12 @@ pub fn search_public (db: State<DBState>, q: String, page: u32, buffer: Option<u
         .to_json()
 }
 
+#[derive(Serialize, Deserialize)]
+struct FullResponse {
+    contact: Contact,
+    info: BareInfo
+}
+
 #[get("/contacts/private?<key>")]
 pub fn get_by_key (db: State<DBState>,
                            persona_key: State<ContactJwtHandler>,
@@ -83,10 +91,12 @@ pub fn get_by_key (db: State<DBState>,
     ).register (&db)
         .to_status()?;
 
-    contact
-        .get_all_info (&db)
-        .to_status()?
-        .to_json()
+    FullResponse {
+        info: contact.get_all_info(&**db)
+            .to_status()?
+            .info,
+        contact
+    }.to_json()
 }
 
 #[get("/contacts/key?<id>")]
