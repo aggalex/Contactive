@@ -51,14 +51,18 @@ CREATE TABLE info (
 );
 
 CREATE FUNCTION search_sort(
-    name VARCHAR(64)
+    name VARCHAR(64),
     query VARCHAR(64)
-) RETURNS SMALLINT
+)
+RETURNS SMALLINT
 LANGUAGE plpgsql
-AS BEGIN
+AS
+$$
+    BEGIN
     RETURN CASE
-        WHEN @name LIKE CONCAT(@QUERY, "%") THEN 1
-        WHEN @name LIKE CONCAT("%", @QUERY, "%") THEN 2
+        WHEN name LIKE CONCAT(query, '%') THEN 1
+        WHEN name LIKE CONCAT('%', query, '%') THEN 2
         ELSE 3
-    END
+    END;
 END
+$$;
