@@ -27,6 +27,7 @@ pub fn start () -> Rocket {
         user::delete,
         user::me,
         user::renew,
+        contacts::get_contact_by_id,
         contacts::get_contacts,
         contacts::add_contacts,
         contacts::delete_contact,

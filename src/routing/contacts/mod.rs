@@ -12,6 +12,13 @@ use rocket::http::Status;
 
 pub mod info;
 
+#[get("/contacts/<id>")]
+pub fn get_contact_by_id (db: State<DBState>, id: i64, user: UserId) -> JsonResponse {
+    ForUser::<Contact>::from(user).query_by_id(id, &**db)
+        .to_status()?
+        .to_json()
+}
+
 #[get("/contacts")]
 pub fn get_contacts (db: State<DBState>, user: UserId) -> JsonResponse {
     User::query_by_id (*user, &db)
