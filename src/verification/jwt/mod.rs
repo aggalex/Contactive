@@ -14,7 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 pub mod jwt_data;
 pub mod blacklist;
-pub mod persona_jwt;
+pub mod contact_jwt;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LoginJwt {

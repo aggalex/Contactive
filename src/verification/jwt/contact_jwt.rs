@@ -26,6 +26,14 @@ pub struct ContactJwtHandler {
     pub key: HS256Key
 }
 
+impl ContactJwtHandler {
+    pub fn new() -> ContactJwtHandler {
+        ContactJwtHandler {
+            key: HS256Key::from_bytes("abcd".as_bytes())
+        }
+    }
+}
+
 impl JwtHandler<&String, ContactJwt> for ContactJwtHandler {
     fn extract(&self, token: &String) ->  Result<Self::Ok, Self::Err> {
         self.verify(&mut token.clone())

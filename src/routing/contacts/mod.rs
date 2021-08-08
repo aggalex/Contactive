@@ -6,7 +6,7 @@ use crate::routing::{ToJson, EmptyResponse};
 use crate::db::{Delete, Update};
 use crate::db::contact::{UpdateContact, PostContact, UserContactRelation, IsContact, Visibility};
 use crate::db::user::{UserId, ForUser};
-use crate::verification::jwt::persona_jwt::{ContactJwtHandler, ContactJwt};
+use crate::verification::jwt::contact_jwt::{ContactJwtHandler, ContactJwt};
 use crate::verification::jwt::{JwtHandler, Jwt};
 use rocket::http::Status;
 

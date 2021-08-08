@@ -6,6 +6,7 @@ use rocket_cors::{AllowedOrigins, CorsOptions};
 use crate::verification::jwt::{LoginHandler, Token};
 use rocket::request::FromRequest;
 use crate::db::user::UserId;
+use crate::verification::jwt::contact_jwt::ContactJwtHandler;
 
 pub mod user;
 pub mod contacts;
@@ -19,6 +20,7 @@ pub fn start () -> Rocket {
     rocket::ignite()
     .manage(crate::db::DBState::new ())
     .manage(LoginHandler::new ())
+    .manage(ContactJwtHandler::new())
     .mount("/", routes![
         root,
         user::register,
