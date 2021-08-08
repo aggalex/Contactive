@@ -4,8 +4,11 @@ use crate::db::{DBState, QueryById, Register, contact::Contact, user::{IsUser, U
 use super::{JsonResponse, StatusCatch};
 use crate::routing::{ToJson, EmptyResponse};
 use crate::db::{Delete, Update};
-use crate::db::contact::{UpdateContact, PostContact};
+use crate::db::contact::{UpdateContact, PostContact, UserContactRelation, IsContact, Visibility};
 use crate::db::user::{UserId, ForUser};
+use crate::verification::jwt::persona_jwt::{ContactJwtHandler, ContactJwt};
+use crate::verification::jwt::{JwtHandler, Jwt};
+use rocket::http::Status;
 
 pub mod info;
 
@@ -48,9 +51,47 @@ pub fn edit_contact (db: State<DBState>, id: i64, contact: Json<UpdateContact>, 
 }
 
 #[get("/contacts/public?<q>&<page>&<buffer>")]
-pub fn search_public_contacts (db: State<DBState>, q: String, page: u32, buffer: Option<u32>) -> JsonResponse {
+pub fn search_public (db: State<DBState>, q: String, page: u32, buffer: Option<u32>) -> JsonResponse {
     let buffer = buffer.unwrap_or(10);
     Contact::search_public(&**db, page as i64, buffer as i64, q)
+        .to_status()?
+        .to_json()
+}
+
+#[get("/contacts/private?<key>")]
+pub fn get_by_key (db: State<DBState>,
+                           persona_key: State<ContactJwtHandler>,
+                           key: String,
+                           user: UserId) -> JsonResponse {
+    let contact = (*persona_key).extract (&key)
+        .to_status()?
+        .custom.0;
+
+    let contact = Contact::force_get_by_id(contact, &db)
+        .to_status()?;
+
+    UserContactRelation (
+        *user,
+        contact.id
+    ).register (&db)
+        .to_status()?;
+
+    contact
+        .get_all_info (&db)
+        .to_status()?
+        .to_json()
+}
+
+#[get("/contacts/key?<id>")]
+pub fn get_key (db: State<DBState>, contact_key: State<ContactJwtHandler>, id: i64, user: UserId) -> JsonResponse {
+    let contact = ForUser::<Contact>::from(user).query_by_id(id, &db)
+        .to_status()?;
+
+    if contact.creator != *user && contact.visibility() != Visibility::Public {
+        return Err(Status::Unauthorized);
+    }
+
+    ContactJwt(contact.id).encode(&contact_key.key)
         .to_status()?
         .to_json()
 }

@@ -10,11 +10,10 @@ use crate::db::user::ForUser;
 use diesel::result::Error;
 use crate::db::schema::users;
 use crate::db::{Delete, Register};
-use sha2::digest::generic_array::typenum::private::IsGreaterOrEqualPrivate;
 
 pub mod info;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Visibility {
     Local, Private, Public
 }
