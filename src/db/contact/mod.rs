@@ -196,8 +196,6 @@ impl Contact {
         let q = contacts::table.filter(
                 contacts::visibility.ge(2)
                     .and(lower(contacts::name).like(format!("%{}%", query.to_lowercase()))))
-            .order(search_sort(contacts::name, query.clone()))
-            .then_order_by(contacts::name.asc())
             .group_by((contacts::id, contacts::name, contacts::icon, contacts::visibility, contacts::creator));
         Ok(SearchResults {
             pages: {
@@ -210,6 +208,8 @@ impl Contact {
             },
             contacts: q.offset(page * buffer)
                 .limit(buffer)
+                .order(search_sort(contacts::name, query.clone()))
+                .then_order_by(contacts::name.asc())
                 .load::<Contact>(db)?
         })
     }
