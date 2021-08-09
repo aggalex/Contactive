@@ -197,11 +197,14 @@ impl Contact {
                     .and(lower(contacts::name).like(format!("%{}%", query.to_lowercase()))))
             .order(search_sort(contacts::name, query))
             .then_order_by(contacts::name.asc())
-            .offset(page * buffer)
-            .limit(buffer);
+            // .group_by();
         Ok(SearchResults {
-            pages: q.clone().select(count(contacts::id)).first::<i64>(db)?,
-            contacts: q.load::<Contact>(db)?
+            pages: q.clone()
+                .select(count(contacts::id))
+                .first::<i64>(db)?,
+            contacts: q.offset(page * buffer)
+                .limit(buffer)
+                .load::<Contact>(db)?
         })
     }
 }
