@@ -203,9 +203,10 @@ impl Contact {
             pages: {
                 let count = q.clone()
                     .select(count_star())
-                    .first::<i64>(db)? / buffer;
-                println!("\t => Query: {}, Pages: {}", query, count);
-                count
+                    .first::<i64>(db)?;
+                let pages = count / buffer;
+                println!("\t => Query: {}, Found: {}, Pages: {}", query, count, pages);
+                pages
             },
             contacts: q.offset(page * buffer)
                 .limit(buffer)
