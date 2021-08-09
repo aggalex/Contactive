@@ -4,7 +4,7 @@ use crate::db::{DBState, QueryById, Register, contact::Contact, user::{IsUser, U
 use super::{JsonResponse, StatusCatch};
 use crate::routing::{ToJson, EmptyResponse};
 use crate::db::{Delete, Update};
-use crate::db::contact::{UpdateContact, PostContact, UserContactRelation, IsContact, Visibility};
+use crate::db::contact::{UpdateContact, PostContact, UserContactRelation, IsContact, Visibility, Entitlement};
 use crate::db::user::{UserId, ForUser};
 use crate::verification::jwt::contact_jwt::{ContactJwtHandler, ContactJwt};
 use crate::verification::jwt::{JwtHandler, Jwt};
@@ -52,8 +52,12 @@ pub fn delete_contact (db: State<DBState>, id: i64, user: UserId) -> EmptyRespon
 
 #[patch("/contacts/<id>", format = "application/json", data = "<contact>")]
 pub fn edit_contact (db: State<DBState>, id: i64, contact: Json<UpdateContact>, user: UserId) -> JsonResponse {
-    let factory: ForUser<UpdateContact> = user.into();
-    factory.get(contact.into_inner())
+    if let (Entitlement::Borrows, _) = ForUser::<Contact>::from(user)
+            .has_jurisdiction(id, &**db)
+            .to_status()? {
+        return Err(Status::Unauthorized)
+    }
+    contact.into_inner()
         .update(&**db, id)
         .to_status()?
         .to_json()

@@ -112,37 +112,12 @@ impl ForUser<NewContact> {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(AsChangeset, Serialize, Deserialize, Clone, Debug)]
+#[table_name="contacts"]
 pub struct UpdateContact {
     pub name: Option<String>,
     pub icon: Option<Option<Vec<u8>>>,
     visibility: Option<i16>,
-}
-
-#[derive(AsChangeset, Serialize, Deserialize, Clone, Debug)]
-#[table_name="contacts"]
-pub struct _UpdateContact {
-    pub name: Option<String>,
-    pub icon: Option<Option<Vec<u8>>>,
-    visibility: Option<i16>,
-    pub creator: i64
-}
-
-impl ForUser<UpdateContact> {
-    pub fn get(&self, u: UpdateContact) -> _UpdateContact {
-        match u {
-            UpdateContact {
-                name,
-                icon,
-                visibility: vis
-            } => _UpdateContact {
-                name,
-                icon,
-                visibility: vis,
-                creator: self.0
-            }
-        }
-    }
 }
 
 impl UpdateContact {
@@ -154,7 +129,7 @@ impl UpdateContact {
     }
 }
 
-update!(_UpdateContact => NewContact, i64);
+update!(UpdateContact => NewContact, i64);
 // delete!(Contact => NewContact, i64);
 
 impl Delete for ForUser<Contact> {
@@ -163,7 +138,15 @@ impl Delete for ForUser<Contact> {
     type PrimaryKey = i64;
 
     fn delete(&self, db: &DefaultConnection, id: Self::PrimaryKey) -> Result<usize, Error> {
-        self.has_jurisdiction(id, db)?;
+        let (entitlement, _) = self.has_jurisdiction(id, db)?;
+        if entitlement == Entitlement::Borrows {
+            return diesel::delete(users_contacts_join::table)
+                .filter(
+                    users_contacts_join::contact_id.eq(id)
+                        .and(users_contacts_join::user_id.eq(self.0))
+                )
+                .execute(db)
+        }
         diesel::delete(contacts::table)
             .filter(contacts::id.eq(id))
             .execute(db)
@@ -214,6 +197,12 @@ impl Contact {
     }
 }
 
+#[derive(Ord, PartialOrd, Eq, PartialEq, Clone)]
+pub enum Entitlement {
+    Owns,
+    Borrows,
+}
+
 impl ForUser<Contact> {
     pub fn query_by_id (&self, id: i64, db: &DefaultConnection) -> diesel::result::QueryResult<Contact> {
         let contact = contacts::table.filter(contacts::id.eq(id))
@@ -224,16 +213,18 @@ impl ForUser<Contact> {
         Ok(contact)
     }
 
-    pub fn has_jurisdiction (&self, id: i64, db: &DefaultConnection) -> diesel::result::QueryResult<UserContactRelation> {
-        if Contact::force_get_by_id(id, db)?.visibility() == Visibility::Public {
-            return Ok(UserContactRelation (
-                self.0,
-                id
-            ))
+    pub fn has_jurisdiction (&self, id: i64, db: &DefaultConnection) -> diesel::result::QueryResult<(Entitlement, Contact)> {
+        let contact = Contact::force_get_by_id(id, db)?;
+        if contact.creator == self.0 {
+            return Ok((Entitlement::Owns, contact))
+        }
+        if contact.visibility() == Visibility::Public {
+            return Ok((Entitlement::Borrows, contact))
         }
         users_contacts_join::table.filter(users_contacts_join::user_id.eq(self.0)
             .and(users_contacts_join::contact_id.eq(id)))
-            .first::<UserContactRelation>(db)
+            .first::<UserContactRelation>(db)?;
+        return Ok((Entitlement::Borrows, contact))
     }
 }
 

@@ -68,7 +68,7 @@ pub trait Register: {
     
 }
 
-pub trait Update: AsChangeset + Sized {
+pub trait Update: {
 
     type Table: Table;
     const TABLE: Self::Table;
