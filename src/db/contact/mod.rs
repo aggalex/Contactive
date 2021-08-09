@@ -10,7 +10,7 @@ use crate::db::user::ForUser;
 use diesel::result::Error;
 use crate::db::schema::{users, search_sort, lower};
 use crate::db::{Delete, Register};
-use diesel::expression::count::count;
+use diesel::expression::count::{count, count_star};
 use crate::diesel::GroupByDsl;
 
 pub mod info;
@@ -196,13 +196,17 @@ impl Contact {
         let q = contacts::table.filter(
                 contacts::visibility.ge(2)
                     .and(lower(contacts::name).like(format!("%{}%", query.to_lowercase()))))
-            .order(search_sort(contacts::name, query))
+            .order(search_sort(contacts::name, query.clone()))
             .then_order_by(contacts::name.asc())
             .group_by((contacts::id, contacts::name, contacts::icon, contacts::visibility, contacts::creator));
         Ok(SearchResults {
-            pages: q.clone()
-                .select(count(contacts::id))
-                .first::<i64>(db)?,
+            pages: {
+                let count = q.clone()
+                    .select(count_star())
+                    .first::<i64>(db)? / buffer;
+                println!("\t => Query: {}, Pages: {}", query, count);
+                count
+            },
             contacts: q.offset(page * buffer)
                 .limit(buffer)
                 .load::<Contact>(db)?
