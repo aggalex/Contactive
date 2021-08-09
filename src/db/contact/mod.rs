@@ -178,21 +178,36 @@ pub struct Contact {
     pub creator: i64
 }
 
+#[derive(Queryable, Serialize)]
+pub struct SearchResults {
+    pages: i64,
+    contacts: Vec<Contact>
+}
+
 impl Contact {
     pub fn force_get_by_id(id: i64, db: &DefaultConnection) -> diesel::result::QueryResult<Contact> {
         contacts::table.filter(contacts::id.eq(id))
             .first::<Contact> (db)
     }
 
-    pub fn search_public(db: &DefaultConnection, page: i64, buffer: i64, query: String) -> diesel::result::QueryResult<Vec<Contact>> {
-        contacts::table.filter(
+    pub fn search_public(db: &DefaultConnection, page: i64, buffer: i64, query: String) -> diesel::result::QueryResult<SearchResults> {
+        let res: Vec<(i64, Contact)> = contacts::table.filter(
                 contacts::visibility.ge(2)
                     .and(lower(contacts::name).like(format!("%{}%", query.to_lowercase()))))
             .order(search_sort(contacts::name, query))
             .then_order_by(contacts::name.asc())
             .offset(page * buffer)
             .limit(buffer)
-            .load(db)
+            .select((
+                diesel::dsl::sql::<diesel::sql_types::BigInt>("count(*)"),
+                contacts::all_columns))
+            .load (db)?;
+        Ok(SearchResults {
+            pages: res[0].0 / buffer + 1,
+            contacts: res.into_iter()
+                .map(|entry| entry.1)
+                .collect::<Vec<Contact>> ()
+        })
     }
 }
 
