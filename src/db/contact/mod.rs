@@ -196,7 +196,7 @@ impl Contact {
                 contacts::visibility.ge(2)
                     .and(lower(contacts::name).like(format!("%{}%", query.to_lowercase()))))
             .order(search_sort(contacts::name, query))
-            .then_order_by(contacts::name.asc())
+            .then_order_by(contacts::name.asc());
             // .group_by();
         Ok(SearchResults {
             pages: q.clone()
