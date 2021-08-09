@@ -200,7 +200,7 @@ impl Contact {
                 let count = q.clone()
                     .count()
                     .get_result::<i64>(db)?;
-                let pages = count / buffer;
+                let pages = count / buffer + 1;
                 println!("\t => Query: {}, Found: {}, Pages: {}", query, count, pages);
                 pages
             },
