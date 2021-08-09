@@ -202,8 +202,8 @@ impl Contact {
         Ok(SearchResults {
             pages: {
                 let count = q.clone()
-                    .select(count_star())
-                    .first::<i64>(db)?;
+                    .count()
+                    .get_result::<i64>(db)?;
                 let pages = count / buffer;
                 println!("\t => Query: {}, Found: {}, Pages: {}", query, count, pages);
                 pages
