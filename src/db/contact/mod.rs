@@ -10,7 +10,7 @@ use crate::db::user::ForUser;
 use diesel::result::Error;
 use crate::db::schema::{users, search_sort, lower};
 use crate::db::{Delete, Register};
-use diesel::expression::count::count_star;
+use diesel::expression::count::count;
 
 pub mod info;
 
@@ -200,7 +200,7 @@ impl Contact {
             .offset(page * buffer)
             .limit(buffer);
         Ok(SearchResults {
-            pages: q.clone().select(count_star()).first::<i64>(db)?,
+            pages: q.clone().select(count(contacts::id)).first::<i64>(db)?,
             contacts: q.load::<Contact>(db)?
         })
     }
