@@ -205,10 +205,7 @@ pub enum Entitlement {
 
 impl ForUser<Contact> {
     pub fn query_by_id (&self, id: i64, db: &DefaultConnection) -> diesel::result::QueryResult<Contact> {
-        let contact = contacts::table.filter(contacts::id.eq(id))
-            .first::<Contact> (db)?;
-
-        self.has_jurisdiction(contact.id, db)?;
+        let (_, contact) = self.has_jurisdiction(id, db)?;
 
         Ok(contact)
     }
@@ -224,7 +221,7 @@ impl ForUser<Contact> {
         users_contacts_join::table.filter(users_contacts_join::user_id.eq(self.0)
             .and(users_contacts_join::contact_id.eq(id)))
             .first::<UserContactRelation>(db)?;
-        return Ok((Entitlement::Borrows, contact))
+        Ok((Entitlement::Borrows, contact))
     }
 }
 
