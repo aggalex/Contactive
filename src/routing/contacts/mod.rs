@@ -71,6 +71,16 @@ pub fn search_public (db: State<DBState>, q: String, page: u32, buffer: Option<u
         .to_json()
 }
 
+#[get("/contacts/public/<id>")]
+pub fn get_public_by_id (db: State<DBState>, id: i64) -> JsonResponse {
+    let contact = Contact::force_get_by_id(id, &**db)
+        .to_status()?;
+    if contact.visibility() != Visibility::Public {
+        return Err(Status::Unauthorized)
+    }
+    contact.to_json()
+}
+
 #[derive(Serialize, Deserialize)]
 struct FullResponse {
     contact: Contact,
