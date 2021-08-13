@@ -35,6 +35,7 @@ pub fn start () -> Rocket {
         contacts::delete_contact,
         contacts::edit_contact,
         contacts::search_public,
+        contacts::get_public_by_id,
         contacts::get_by_key,
         contacts::get_key,
         contacts::info::get_info,
