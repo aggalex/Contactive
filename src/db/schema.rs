@@ -4,7 +4,7 @@ table! {
     contacts (id) {
         id -> Int8,
         name -> Varchar,
-        icon -> Nullable<Bytea>,
+        icon -> Nullable<Text>,
         visibility -> Int2,
         creator -> Int8,
     }

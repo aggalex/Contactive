@@ -42,7 +42,7 @@ impl From<i16> for Visibility {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PostContact {
     pub name: String,
-    pub icon: Option<Vec<u8>>,
+    pub icon: Option<String>,
     visibility: i16,
 }
 
@@ -60,7 +60,7 @@ impl ForUser<PostContact> {
 #[table_name="contacts"]
 pub struct NewContact {
     pub name: String,
-    pub icon: Option<Vec<u8>>,
+    pub icon: Option<String>,
     visibility: i16,
     pub creator: i64
 }
@@ -96,7 +96,7 @@ impl NewContact {
 }
 
 impl ForUser<NewContact> {
-    pub fn new(&self, name: String, icon: Option<Vec<u8>>, vis: impl Into<i16>) -> NewContact {
+    pub fn new(&self, name: String, icon: Option<String>, vis: impl Into<i16>) -> NewContact {
         NewContact { name, icon,
             visibility: vis.into(),
             creator: self.0
@@ -116,7 +116,7 @@ impl ForUser<NewContact> {
 #[table_name="contacts"]
 pub struct UpdateContact {
     pub name: Option<String>,
-    pub icon: Option<Option<Vec<u8>>>,
+    pub icon: Option<Option<String>>,
     visibility: Option<i16>,
 }
 
@@ -157,7 +157,7 @@ impl Delete for ForUser<Contact> {
 pub struct Contact {
     pub id: i64,
     pub name: String,
-    pub icon: Option<Vec<u8>>,
+    pub icon: Option<String>,
     visibility: i16,
     pub creator: i64
 }

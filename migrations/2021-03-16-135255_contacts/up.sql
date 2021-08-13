@@ -11,7 +11,7 @@ CREATE TABLE users (
 CREATE TABLE contacts (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(64) NOT NULL,
-    icon BYTEA,
+    icon Text,
     creator BIGINT NOT NULL,
         
     visibility SMALLINT CHECK(visibility IN (0, 1, 2)) NOT NULL,
