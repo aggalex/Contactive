@@ -4,7 +4,7 @@ use crate::db::{DBState, QueryById, Register, contact::Contact, user::{IsUser, U
 use super::{JsonResponse, StatusCatch};
 use crate::routing::{ToJson, EmptyResponse};
 use crate::db::{Delete, Update};
-use crate::db::contact::{UpdateContact, PostContact, UserContactRelation, IsContact, Visibility, Entitlement};
+use crate::db::contact::{UpdateContact, PostContact, UserContactRelation, IsContact, Visibility, Entitlement, Validate};
 use crate::db::user::{UserId, ForUser};
 use crate::verification::jwt::contact_jwt::{ContactJwtHandler, ContactJwt};
 use crate::verification::jwt::{JwtHandler, Jwt};
@@ -32,6 +32,12 @@ pub fn get_contacts (db: State<DBState>, user: UserId) -> JsonResponse {
 #[post("/contacts", format = "application/json", data = "<contacts>")]
 pub fn add_contacts (db: State<DBState>, contacts: Json<Vec<PostContact>>, user: UserId) -> JsonResponse {
     let factory = ForUser::<PostContact>::from(user);
+    if (&*contacts).into_iter()
+        .filter(|contact| !contact.validate())
+        .take(1)
+        .collect::<Vec<&PostContact>>().len() > 0 {
+        return Err(Status::ExpectationFailed)
+    };
     contacts.into_inner()
         .into_iter ()
         .map(|contact|
@@ -56,6 +62,9 @@ pub fn edit_contact (db: State<DBState>, id: i64, contact: Json<UpdateContact>, 
             .has_jurisdiction(id, &**db)
             .to_status()? {
         return Err(Status::Unauthorized)
+    }
+    if contact.validate() == false {
+        return Err(Status::ExpectationFailed)
     }
     contact.into_inner()
         .update(&**db, id)

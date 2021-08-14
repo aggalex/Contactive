@@ -39,11 +39,24 @@ impl From<i16> for Visibility {
     }
 }
 
+pub trait Validate {
+    fn icon(&self) -> Option<&String>;
+    fn validate(&self) -> bool {
+        self.icon().map(|i| i.len() <= 12_800).unwrap_or(true)
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PostContact {
     pub name: String,
     pub icon: Option<String>,
     visibility: i16,
+}
+
+impl Validate for PostContact {
+    fn icon(&self) -> Option<&String> {
+        self.icon.as_ref()
+    }
 }
 
 impl ForUser<PostContact> {
@@ -63,6 +76,12 @@ pub struct NewContact {
     pub icon: Option<String>,
     visibility: i16,
     pub creator: i64
+}
+
+impl Validate for NewContact {
+    fn icon(&self) -> Option<&String> {
+        self.icon.as_ref()
+    }
 }
 
 impl Register for NewContact {
@@ -116,7 +135,7 @@ impl ForUser<NewContact> {
 #[table_name="contacts"]
 pub struct UpdateContact {
     pub name: Option<String>,
-    pub icon: Option<Option<String>>,
+    pub icon: Option<String>,
     visibility: Option<i16>,
 }
 
@@ -129,7 +148,26 @@ impl UpdateContact {
     }
 }
 
-update!(UpdateContact => NewContact, i64);
+impl Validate for UpdateContact {
+    fn icon(&self) -> Option<&String> {
+        self.icon.as_ref()
+    }
+}
+
+impl crate::db::Update for UpdateContact {
+    type Table = <NewContact as crate::db::Register>::Table;
+    const TABLE: Self::Table = <NewContact as crate::db::Register>::TABLE;
+    type Queryable = <NewContact as crate::db::Register>::Queryable;
+
+    type PrimaryKey = i64;
+
+    fn update(&self, db: &DefaultConnection, id: Self::PrimaryKey) -> Result<Self::Queryable, diesel::result::Error> {
+        diesel::update(<Self as crate::db::Update>::TABLE.find(id))
+            .set(self)
+            .get_result::<Self::Queryable>(db)
+    }
+}
+
 // delete!(Contact => NewContact, i64);
 
 impl Delete for ForUser<Contact> {
