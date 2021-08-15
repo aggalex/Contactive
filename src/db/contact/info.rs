@@ -143,6 +143,21 @@ impl Serialize for InfoFragment {
 impl_register_for!(InfoFragment, InfoFragment, info::table);
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct FullInfo {
+    pub contact: Contact,
+    pub info: BareInfo
+}
+
+impl FullInfo {
+    pub fn of (contact: Contact, db: &DefaultConnection) -> Result<FullInfo, diesel::result::Error> {
+        Ok(FullInfo {
+            info: Info::of(&contact, db)?.info,
+            contact,
+        })
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Info {
     pub contact_id: i64,
     pub info: BareInfo

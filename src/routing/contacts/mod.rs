@@ -87,7 +87,10 @@ pub fn get_public_by_id (db: State<DBState>, id: i64) -> JsonResponse {
     if contact.visibility() != Visibility::Public {
         return Err(Status::Unauthorized)
     }
-    contact.to_json()
+    contact
+        .get_full_info(&**db)
+        .to_status()?
+        .to_json()
 }
 
 #[derive(Serialize, Deserialize)]

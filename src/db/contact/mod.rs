@@ -11,6 +11,7 @@ use diesel::result::Error;
 use crate::db::schema::{users, search_sort, lower};
 use crate::db::{Delete, Register};
 use crate::diesel::GroupByDsl;
+use crate::db::contact::info::FullInfo;
 
 pub mod info;
 
@@ -315,6 +316,10 @@ pub trait IsContact {
         Info::of (self, db)
     }
 
+    fn get_full_info (&self, db: &DefaultConnection) -> Result<FullInfo, diesel::result::Error> {
+        FullInfo::of(self.get_contact(db)?, db)
+    }
+
     fn get_user (&self, db: &DefaultConnection) -> Result<User, diesel::result::Error> {
         users::table
             .filter(users::id.eq(self.creator()))
@@ -353,6 +358,10 @@ impl IsContact for Contact {
 
     fn get_contact(&self, _: &DefaultConnection) -> Result<Contact, diesel::result::Error> {
         Ok(self.clone ())
+    }
+
+    fn get_full_info(&self, db: &DefaultConnection) -> Result<FullInfo, Error> {
+        FullInfo::of(self.clone(), db)
     }
 
     fn creator(&self) -> i64 {
